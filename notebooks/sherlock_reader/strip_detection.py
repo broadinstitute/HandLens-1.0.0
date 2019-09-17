@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser('Read Sherlock Strips')
 parser.add_argument('--image_file', required=True)
 parser.add_argument('--truth_file', help='File which give the truth value of the strips in'
-                                                'the image file', required=False)
+                                                'the image file', required=False, default=None)
 parser.add_argument('--output_dir', help='directory for output files')
 
 args = parser.parse_args()
@@ -778,7 +778,7 @@ for sbx in strip_boxes:
 # labels for each image, if provided.
 truth_values = getTruthValueFromFile(truth_file)
 if truth_values is None:
-    truth_values = ''*len(raw_strip_images)
+    truth_values = ['']*len(raw_strip_images)
 else:
     truth_values = ['_{}'.format(val) for val in truth_values]
 
