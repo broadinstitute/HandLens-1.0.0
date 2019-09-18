@@ -13,15 +13,23 @@ from sklearn.model_selection import StratifiedKFold
 
 
 class MaxDetector:
-    def __init__(self):
+    def __init__(self, thresh=65):
         self.positive_signal_values = []
         self.negative_signal_values = []
+        self.thresh = thresh
 
     def analyze_strip_with_known_truth(self, signal, signal_truth):
+        signal_val = self.identify_single_max(signal)
         if signal_truth == 'pos':
-            self.positive_signal_values.append(self.identify_single_max(signal))
+            self.positive_signal_values.append(signal_val)
         else:
-            self.negative_signal_values.append(self.identify_single_max(signal))
+            self.negative_signal_values.append(signal_val)
+        return signal_val
+
+    def predict_signal_truth(self, signal):
+        if self.identify_single_max(signal) > self.thresh:
+            return True
+        return False
 
     def identify_single_max(self, data):
         half_data = data[int(data.shape[0] / 2):]

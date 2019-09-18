@@ -5,9 +5,19 @@ import imutils
 import math
 import numpy as np
 import argparse
+import sys
 import matplotlib
 import os
-import matplotlib.lines as mlines
+if __name__ == '__main__':
+    from strip_analysis import MaxDetector
+    from strip_analysis import correct_input_image
+    from strip_analysis import convert_image_to_linear_signal
+else:
+    from .strip_analysis import MaxDetector
+    from .strip_analysis import correct_input_image
+    from .strip_analysis import convert_image_to_linear_signal
+
+
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -15,12 +25,14 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser('Read Sherlock Strips')
 parser.add_argument('--image_file', required=True)
 parser.add_argument('--truth_file', help='File which give the truth value of the strips in'
-                                                'the image file', required=False, default=None)
+                                         'the image file', required=False, default=None)
 parser.add_argument('--output_dir', help='directory for output files')
+parser.add_argument('--prediction_mode', help='Enable predictions', action='store_true')
 
 args = parser.parse_args()
 image_file = args.image_file
 truth_file = args.truth_file
+prediction_mode = args.prediction_mode
 output_dir = args.output_dir
 if output_dir is None:
     output_prefix = os.path.splitext(image_file)[0]
@@ -245,6 +257,7 @@ def getTruthValueFromFile(filename):
             truth_values.append(line)
     return truth_values
 
+
 # In[180]:
 
 
@@ -273,7 +286,7 @@ mask = redgreen_mask1 + redgreen_mask2
 # # fix image brighness by normalizing to red channel
 red_hsv_v = cv2.mean(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), red_mask)[2]
 exp_red_hsv_v = 65
-if red_hsv_v < exp_red_hsv_v/3.0:
+if red_hsv_v < exp_red_hsv_v / 3.0:
     raise Exception('Image is too dim')
 
 # When we're testing, sometimes we've made test images artifically have
@@ -293,13 +306,12 @@ if red_hsv_v < exp_red_hsv_v:
         v[v > lim] = 255
         v[v <= lim] += int(add_val)
     else:
-        mult_val = exp_red_hsv_v/red_hsv_v
+        mult_val = exp_red_hsv_v / red_hsv_v
         cv2.convertScaleAbs(v, v, mult_val, 0)
 
     image = cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
-    cv2.convertScaleAbs(image, image, exp_red_hsv_v/red_hsv_v, 0);
+    cv2.convertScaleAbs(image, image, exp_red_hsv_v / red_hsv_v, 0);
     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
 
 # Processing Step 2a: determining the bounding boxes for the red arrows.
 # Because the red hue seems to be well-conserved between images,
@@ -542,6 +554,7 @@ for box in top_boxes:
     tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 5)
     tmp = cv2.circle(tmp, (box[0][0], box[0][1]), 20, (255, 0, 0), -1)
 
+
 # plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
 
 
@@ -778,7 +791,7 @@ for sbx in strip_boxes:
 # labels for each image, if provided.
 truth_values = getTruthValueFromFile(truth_file)
 if truth_values is None:
-    truth_values = ['']*len(raw_strip_images)
+    truth_values = [''] * len(raw_strip_images)
 else:
     truth_values = ['_{}'.format(val) for val in truth_values]
 
@@ -799,7 +812,20 @@ for img in raw_strip_images:
     norm_strip_images += [nimg]
 
     # vimg = cv2.flip(nimg, 0)
-    cv2.imwrite(output_prefix + '_raw_strip{}{}.png'.format(idx, truth_values[idx]), nimg)
+    if not prediction_mode:
+        cv2.imwrite(output_prefix + '_raw_strip{}{}.png'.format(idx, truth_values[idx]), nimg)
     # plots[idx].imshow(cv2.cvtColor(vimg, cv2.COLOR_BGR2RGB))
     idx += 1
-# fig.savefig('')
+
+if prediction_mode:
+    truths = []
+    for nimg in norm_strip_images:
+        max_detector = MaxDetector()
+        truths.append(max_detector.predict_signal_truth(
+            convert_image_to_linear_signal(correct_input_image(nimg, 'clahe'))))
+    if len(truths) == 2:
+        print(truths[1])
+    else:
+        print(truths)
+    sys.stdout.flush()
+
