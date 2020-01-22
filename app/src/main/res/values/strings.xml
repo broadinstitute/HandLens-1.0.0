@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">SHERLOCK Reader</string>
+    <string name="edit_message">" Sample Name"</string>
+    <string name="button_send">Send</string>
+    <string name="activate_camera">Take picture</string>
+    <string name="stripBoxDesc">strip_bounding_box</string>
+</resources>
