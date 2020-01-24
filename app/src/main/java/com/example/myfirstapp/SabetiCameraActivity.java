@@ -3,11 +3,15 @@ package com.example.myfirstapp;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatButton;
 import androidx.camera.core.CameraX;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureConfig;
 import androidx.camera.core.Preview;
 import androidx.camera.core.PreviewConfig;
+import androidx.constraintlayout.solver.widgets.ConstraintAnchor;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.constraintlayout.widget.ConstraintSet;
 import androidx.constraintlayout.widget.Constraints;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -22,6 +26,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
 import android.view.MotionEvent;
@@ -30,12 +35,17 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+
+import static android.view.View.LAYOUT_DIRECTION_INHERIT;
 
 
 public class SabetiCameraActivity extends AppCompatActivity {
@@ -47,6 +57,9 @@ public class SabetiCameraActivity extends AppCompatActivity {
     public static final String CAMERA_DATE_FORMAT = "yyyyMMdd_HHmmss";
     public static final String RESULTS_DIRECTORY = "/results";
 
+    private int viewHeight;
+    private int viewWidth;
+
     private class Box extends View {
         private Paint paint = new Paint();
         private ScaleGestureDetector mScaleGestureDetector;
@@ -57,9 +70,11 @@ public class SabetiCameraActivity extends AppCompatActivity {
         private float mPrevY;
         private float mPosX = 0f;
         private float mPosY = 0f;
+        private ImageButton mImageButton;
 
-        Box(Context context) {
+        Box(Context context, ImageButton imageButton) {
             super(context);
+            mImageButton = imageButton;
             mScaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
 //            mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener());
 
@@ -164,6 +179,9 @@ public class SabetiCameraActivity extends AppCompatActivity {
             paint.setStrokeWidth(x0 / 200);
             paint.setTextSize(16 * getResources().getDisplayMetrics().density);
             canvas.drawText("Ctrl", x0 - strip_width * 2, (y0 - strip_height) / 2 - (y0 - strip_height) / 20, paint);
+            ((ViewGroup) mImageButton.getParent()).removeView(mImageButton);
+            ((ViewGroup)this.getParent()).addView(mImageButton);
+
             canvas.restore();
         }
     }
@@ -175,6 +193,24 @@ public class SabetiCameraActivity extends AppCompatActivity {
         setContentView(R.layout.activity_camera);
 
         textureView = findViewById(R.id.view_finder);
+
+//        ViewTreeObserver viewTreeObserver = textureView.getViewTreeObserver();
+//        if (viewTreeObserver.isAlive()) {
+//            viewTreeObserver.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+//                @Override
+//                public void onGlobalLayout() {
+//                    textureView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+//                    viewWidth = textureView.getWidth();
+//                    viewHeight = textureView.getHeight();
+//                }
+//            });
+//        }
+
+
+
+        textureView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        viewWidth=textureView.getMeasuredWidth();
+        viewHeight=textureView.getMeasuredHeight();
 
         if (allPermissionsGranted()) {
             // Get the Intent that started this activity and extract the string
@@ -196,8 +232,10 @@ public class SabetiCameraActivity extends AppCompatActivity {
         PreviewConfig previewConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
         Preview preview = new Preview(previewConfig);
 
+        ImageButton imageCaptureView = findViewById(R.id.imgCapture);
+
         Intent resultsPageIntent = new Intent(this, ResultsPageActivity.class);
-        Box box = new Box(this);
+        Box box = new Box(this, imageCaptureView);
         addContentView(box, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         preview.setOnPreviewOutputUpdateListener(
                 new Preview.OnPreviewOutputUpdateListener() {
@@ -207,6 +245,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
                         viewParent.removeView(textureView);
                         viewParent.addView(textureView, 0);
                         textureView.setSurfaceTexture(previewOutput.getSurfaceTexture());
+
                         updateTransform();
                     }
                 });
@@ -215,7 +254,6 @@ public class SabetiCameraActivity extends AppCompatActivity {
                 .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
         final ImageCapture imageCapture = new ImageCapture(imageCaptureConfig);
 
-        View imageCaptureView = findViewById(R.id.imgCapture);
         imageCaptureView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -233,7 +271,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
                         outputDirectory = null;
                     }
                 }
-                File imageFile = new File(outputDirectory,imageFileName + ".jpg" );
+                File imageFile = new File(outputDirectory, imageFileName + ".jpg");
                 String fileName = imageFile.toString();
 
                 imageCapture.takePicture(imageFile, new ImageCapture.OnImageSavedListener() {
@@ -247,7 +285,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
 
                     @Override
                     public void onError(@NonNull ImageCapture.UseCaseError useCaseError, @NonNull String message, @Nullable Throwable cause) {
-                        String msg = "Pic capture failed : " + message +"\nat " + fileName;
+                        String msg = "Pic capture failed : " + message + "\nat " + fileName;
                         Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
                         if (cause != null) {
                             cause.printStackTrace();
@@ -257,12 +295,45 @@ public class SabetiCameraActivity extends AppCompatActivity {
             }
         });
 
-        android.view.ViewGroup.LayoutParams params = imageCaptureView.getLayoutParams();
-        ((ViewGroup)imageCaptureView.getParent()).removeView(imageCaptureView);
-        addContentView(imageCaptureView, params);
-//        Constraints.LayoutParams layoutParams=new Constraints.LayoutParams(params.width, params.height);
-//        layoutParams.setMargins(100, 1000, 20, 30);
-//        addContentView(imageCaptureView, layoutParams);
+//        android.view.ViewGroup.LayoutParams params = imageCaptureView.getLayoutParams();
+//        android.view.ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) imageCaptureView.getLayoutParams();
+////        int margin_width = (((ViewGroup) imageCaptureView.getParent()).getWidth() / 2);
+////        int margin_height = (((ViewGroup) imageCaptureView.getParent()).getHeight() / 2);
+////        ConstraintLayout imageCaptureViewParent = (ConstraintLayout) imageCaptureView.getParent();
+//        ConstraintLayout imageCaptureViewParent = (ConstraintLayout) imageCaptureView.getParent();
+//        ((ViewGroup) imageCaptureView.getParent()).removeView(imageCaptureView);
+//
+//        boolean use_viewgroup_params = false;
+//        if (use_viewgroup_params) {
+//            addContentView(imageCaptureView, params);
+//        } else {
+//            Constraints.LayoutParams layoutParams = new Constraints.LayoutParams(params.width, params.height);
+//            layoutParams.setLayoutDirection(LAYOUT_DIRECTION_INHERIT);
+//            Log.d("SabetiCameraActivity", "WIDTH: " + Integer.toString(viewWidth));
+////            layoutParams.setMargins(100, 1000, 20, 30);
+//            layoutParams.bottomToBottom = ConstraintSet.PARENT_ID;
+////            layoutParams.setMargins(params.leftMargin, params.topMargin, params.rightMargin, params.bottomMargin);
+////            layoutParams.setMargins(viewWidth - params.width / 2,
+////                    viewHeight - params.height / 2,
+////                    viewWidth + params.width / 2,
+////                    viewHeight + params.height / 2
+////            );
+//
+//            ConstraintLayout constraintLayout;
+//            ConstraintSet constraintSet;
+//
+//            constraintLayout = imageCaptureViewParent;
+//            constraintLayout.addView(imageCaptureView);
+//
+//            constraintSet = new ConstraintSet();
+//            constraintSet.clone(constraintLayout);
+//
+//            constraintSet.connect(imageCaptureView.getId(), ConstraintSet.LEFT, constraintLayout.getId(), ConstraintSet.RIGHT, 0);
+//            constraintSet.constrainDefaultHeight(imageCaptureView.getId(), 200);
+//            constraintSet.applyTo(constraintLayout);
+//            imageCaptureView.getParent().bringChildToFront(imageCaptureView);
+////            addContentView((ConstraintLayout)imageCaptureView, layoutParams);
+//        }
 
         //bind to lifecycle:
         CameraX.bindToLifecycle((LifecycleOwner) this, preview, imageCapture);

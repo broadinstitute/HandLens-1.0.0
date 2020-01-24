@@ -4,6 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:id="@+id/activateCamera"
     tools:context=".SabetiCameraActivity">
 
     <!--    <&#45;&#45; Code inspired by https://github.com/journaldev/journaldev/tree/master/Android/AndroidCameraX (MIT license) -->
