@@ -3,16 +3,18 @@ package com.example.myfirstapp;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatButton;
 import androidx.camera.core.CameraX;
+import androidx.camera.core.FocusMeteringAction;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageAnalysisConfig;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureConfig;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.MeteringPoint;
+import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
 import androidx.camera.core.PreviewConfig;
-import androidx.constraintlayout.solver.widgets.ConstraintAnchor;
-import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.constraintlayout.widget.ConstraintSet;
-import androidx.constraintlayout.widget.Constraints;
+import androidx.camera.core.SensorOrientedMeteringPointFactory;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
@@ -26,6 +28,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
@@ -44,6 +47,7 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import static android.view.View.LAYOUT_DIRECTION_INHERIT;
 
@@ -56,6 +60,8 @@ public class SabetiCameraActivity extends AppCompatActivity {
     TextureView textureView;
     public static final String CAMERA_DATE_FORMAT = "yyyyMMdd_HHmmss";
     public static final String RESULTS_DIRECTORY = "/results";
+    private long mLastAnalysisResultTime;
+    private double exposure_required = 1;
 
     private int viewHeight;
     private int viewWidth;
@@ -70,6 +76,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
         private float mPrevY;
         private float mPosX = 0f;
         private float mPosY = 0f;
+
         private ImageButton mImageButton;
 
         Box(Context context, ImageButton imageButton) {
@@ -180,7 +187,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
             paint.setTextSize(16 * getResources().getDisplayMetrics().density);
             canvas.drawText("Ctrl", x0 - strip_width * 2, (y0 - strip_height) / 2 - (y0 - strip_height) / 20, paint);
             ((ViewGroup) mImageButton.getParent()).removeView(mImageButton);
-            ((ViewGroup)this.getParent()).addView(mImageButton);
+            ((ViewGroup) this.getParent()).addView(mImageButton);
 
             canvas.restore();
         }
@@ -194,23 +201,11 @@ public class SabetiCameraActivity extends AppCompatActivity {
 
         textureView = findViewById(R.id.view_finder);
 
-//        ViewTreeObserver viewTreeObserver = textureView.getViewTreeObserver();
-//        if (viewTreeObserver.isAlive()) {
-//            viewTreeObserver.addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-//                @Override
-//                public void onGlobalLayout() {
-//                    textureView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-//                    viewWidth = textureView.getWidth();
-//                    viewHeight = textureView.getHeight();
-//                }
-//            });
-//        }
-
-
-
         textureView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        viewWidth=textureView.getMeasuredWidth();
-        viewHeight=textureView.getMeasuredHeight();
+        viewWidth = textureView.getMeasuredWidth();
+        viewHeight = textureView.getMeasuredHeight();
+
+        mLastAnalysisResultTime = SystemClock.elapsedRealtime();
 
         if (allPermissionsGranted()) {
             // Get the Intent that started this activity and extract the string
@@ -227,8 +222,12 @@ public class SabetiCameraActivity extends AppCompatActivity {
         // (MIT license)
         CameraX.unbindAll();
         // Set up preview screen based
-        Size screen = new Size(textureView.getWidth(), textureView.getHeight());
+        final int screenWidth = textureView.getWidth();
+        final int screenHeight = textureView.getHeight();
+        Size screen = new Size(screenWidth, screenHeight);
         Rational aspectRatio = new Rational(textureView.getWidth(), textureView.getHeight());
+        Log.d("SabetiCameraActivity/", "textureView.getWidt()" + Integer.toString(textureView.getWidth())
+                + " textureView.getHeight()" + Integer.toString(textureView.getHeight()));
         PreviewConfig previewConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
         Preview preview = new Preview(previewConfig);
 
@@ -254,6 +253,42 @@ public class SabetiCameraActivity extends AppCompatActivity {
                 .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
         final ImageCapture imageCapture = new ImageCapture(imageCaptureConfig);
 
+
+//        final ImageAnalysisConfig imageAnalysisConfig =
+//                new ImageAnalysisConfig.Builder()
+//                        .setTargetResolution(screen)
+//                        .setImageReaderMode(ImageAnalysis.ImageReaderMode.ACQUIRE_LATEST_IMAGE)
+//                        .build();
+//
+//        final ImageAnalysis imageAnalysis = new ImageAnalysis(imageAnalysisConfig);
+//        imageAnalysis.setAnalyzer(
+//                (image, rotationDegrees) -> {
+//                    if (SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
+//                        return;
+//                    }
+//
+//                    exposure_required = analyzeImage(image, rotationDegrees);
+//                    if (exposure_required != -1) {
+//                        mLastAnalysisResultTime = SystemClock.elapsedRealtime();
+////                        runOnUiThread(() -> applyToUiAnalyzeImageResult(result));
+//                    }
+//                });
+
+        MeteringPointFactory factory = new SensorOrientedMeteringPointFactory(
+                screenWidth, screenHeight);
+        MeteringPoint point = factory.createPoint(x, y);
+        FocusMeteringAction action = FocusMeteringAction.Builder.from(point,
+                FocusMeteringAction.MeteringMode.AF_ONLY)
+                .addPoint(point2, FocusMeteringAction.MeteringMode.AE_ONLY) // could have many
+                .setAutoFocusCallback(new FocusMeteringAction.OnAutoFocusListener() {
+                    public void onFocusCompleted(boolean isSuccess) {
+                    }
+                })
+                // auto calling cancelFocusAndMetering in 5 seconds
+                .setAutoCancelDuration(5, TimeUnit.SECONDS)
+                .build();
+
+
         imageCaptureView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -274,66 +309,29 @@ public class SabetiCameraActivity extends AppCompatActivity {
                 File imageFile = new File(outputDirectory, imageFileName + ".jpg");
                 String fileName = imageFile.toString();
 
-                imageCapture.takePicture(imageFile, new ImageCapture.OnImageSavedListener() {
-                    @Override
-                    public void onImageSaved(@NonNull File file) {
-                        String msg = "Pic captured at " + file.getAbsolutePath();
-                        Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
-                        resultsPageIntent.putExtra(IMAGE_FILE_NAME, fileName);
-                        startActivity(resultsPageIntent);
-                    }
+                imageCapture.takePicture(imageFile,
+                        new ImageCapture.OnImageSavedListener() {
+                            @Override
+                            public void onImageSaved(@NonNull File file) {
+                                String msg = "Pic captured at " + file.getAbsolutePath();
+                                Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
+                                resultsPageIntent.putExtra(IMAGE_FILE_NAME, fileName);
+                                startActivity(resultsPageIntent);
+                            }
 
-                    @Override
-                    public void onError(@NonNull ImageCapture.UseCaseError useCaseError, @NonNull String message, @Nullable Throwable cause) {
-                        String msg = "Pic capture failed : " + message + "\nat " + fileName;
-                        Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
-                        if (cause != null) {
-                            cause.printStackTrace();
-                        }
-                    }
-                });
+                            @Override
+                            public void onError(ImageCapture.ImageCaptureError imageCaptureError,
+                                                @NonNull String message, @Nullable Throwable cause) {
+                                String msg = "Pic capture failed : " + message + "\nat " + fileName;
+                                Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
+                                if (cause != null) {
+                                    cause.printStackTrace();
+                                }
+                            }
+                        });
             }
         });
 
-//        android.view.ViewGroup.LayoutParams params = imageCaptureView.getLayoutParams();
-//        android.view.ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) imageCaptureView.getLayoutParams();
-////        int margin_width = (((ViewGroup) imageCaptureView.getParent()).getWidth() / 2);
-////        int margin_height = (((ViewGroup) imageCaptureView.getParent()).getHeight() / 2);
-////        ConstraintLayout imageCaptureViewParent = (ConstraintLayout) imageCaptureView.getParent();
-//        ConstraintLayout imageCaptureViewParent = (ConstraintLayout) imageCaptureView.getParent();
-//        ((ViewGroup) imageCaptureView.getParent()).removeView(imageCaptureView);
-//
-//        boolean use_viewgroup_params = false;
-//        if (use_viewgroup_params) {
-//            addContentView(imageCaptureView, params);
-//        } else {
-//            Constraints.LayoutParams layoutParams = new Constraints.LayoutParams(params.width, params.height);
-//            layoutParams.setLayoutDirection(LAYOUT_DIRECTION_INHERIT);
-//            Log.d("SabetiCameraActivity", "WIDTH: " + Integer.toString(viewWidth));
-////            layoutParams.setMargins(100, 1000, 20, 30);
-//            layoutParams.bottomToBottom = ConstraintSet.PARENT_ID;
-////            layoutParams.setMargins(params.leftMargin, params.topMargin, params.rightMargin, params.bottomMargin);
-////            layoutParams.setMargins(viewWidth - params.width / 2,
-////                    viewHeight - params.height / 2,
-////                    viewWidth + params.width / 2,
-////                    viewHeight + params.height / 2
-////            );
-//
-//            ConstraintLayout constraintLayout;
-//            ConstraintSet constraintSet;
-//
-//            constraintLayout = imageCaptureViewParent;
-//            constraintLayout.addView(imageCaptureView);
-//
-//            constraintSet = new ConstraintSet();
-//            constraintSet.clone(constraintLayout);
-//
-//            constraintSet.connect(imageCaptureView.getId(), ConstraintSet.LEFT, constraintLayout.getId(), ConstraintSet.RIGHT, 0);
-//            constraintSet.constrainDefaultHeight(imageCaptureView.getId(), 200);
-//            constraintSet.applyTo(constraintLayout);
-//            imageCaptureView.getParent().bringChildToFront(imageCaptureView);
-////            addContentView((ConstraintLayout)imageCaptureView, layoutParams);
-//        }
 
         //bind to lifecycle:
         CameraX.bindToLifecycle((LifecycleOwner) this, preview, imageCapture);
@@ -369,6 +367,10 @@ public class SabetiCameraActivity extends AppCompatActivity {
 
         mx.postRotate((float) rotationDgr, cX, cY);
         textureView.setTransform(mx);
+    }
+
+    public double analyzeImage(ImageProxy image, int rotationDegrees) {
+        return 0;
     }
 
     @Override
