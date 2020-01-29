@@ -14,9 +14,10 @@ import android.widget.EditText;
 
 public class MainActivity extends AppCompatActivity {
     public static final String EXTRA_MESSAGE = "com.example.myfirstapp.MESSAGE";
-    private int REQUEST_CODE_PERMISSIONS = 101;
-    private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.WRITE_EXTERNAL_STORAGE",
-            "android.permission.CAMERA",
+    public static int REQUEST_CODE_PERMISSIONS = 101;
+    public static final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA",
+            "android.permission.WRITE_EXTERNAL_STORAGE",
+            "android.permission.READ_EXTERNAL_STORAGE",
             "android.permission.INTERNET",
             "android.permission.ACCESS_NETWORK_STATE",
             "android.permission.ACCESS_WIFI_STATE"};
@@ -49,7 +50,8 @@ public class MainActivity extends AppCompatActivity {
      * Called when the user taps the Take Picture button
      */
     public void activateCamera(View view) {
-        Intent intent = new Intent(this, SabetiCameraActivity.class);
+//        Intent intent = new Intent(this, SabetiCameraActivity.class);
+        Intent intent = new Intent(this, SabetiLaunchCameraAppActivity.class);
         EditText editText = (EditText) findViewById(R.id.numb_);
         String message = editText.getText().toString();
         intent.putExtra(EXTRA_MESSAGE, message);

@@ -4,17 +4,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraX;
-import androidx.camera.core.FocusMeteringAction;
-import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.ImageAnalysisConfig;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureConfig;
 import androidx.camera.core.ImageProxy;
-import androidx.camera.core.MeteringPoint;
-import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
 import androidx.camera.core.PreviewConfig;
-import androidx.camera.core.SensorOrientedMeteringPointFactory;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
@@ -54,8 +48,13 @@ import static android.view.View.LAYOUT_DIRECTION_INHERIT;
 
 public class SabetiCameraActivity extends AppCompatActivity {
 
-    private int REQUEST_CODE_PERMISSIONS = 101;
-    private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
+    public static int REQUEST_CODE_PERMISSIONS = 101;
+    public static final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA",
+            "android.permission.WRITE_EXTERNAL_STORAGE",
+            "android.permission.READ_EXTERNAL_STORAGE",
+            "android.permission.INTERNET",
+            "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.ACCESS_WIFI_STATE"};
     public static final String IMAGE_FILE_NAME = "IMAGE_FILE_NAME";
     TextureView textureView;
     public static final String CAMERA_DATE_FORMAT = "yyyyMMdd_HHmmss";
@@ -226,7 +225,8 @@ public class SabetiCameraActivity extends AppCompatActivity {
         final int screenHeight = textureView.getHeight();
         Size screen = new Size(screenWidth, screenHeight);
         Rational aspectRatio = new Rational(textureView.getWidth(), textureView.getHeight());
-        Log.d("SabetiCameraActivity/", "textureView.getWidt()" + Integer.toString(textureView.getWidth())
+        Log.d("SabetiCameraActivity/",
+                "textureView.getWidt()" + Integer.toString(textureView.getWidth())
                 + " textureView.getHeight()" + Integer.toString(textureView.getHeight()));
         PreviewConfig previewConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
         Preview preview = new Preview(previewConfig);
@@ -252,42 +252,6 @@ public class SabetiCameraActivity extends AppCompatActivity {
         ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder().setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
                 .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
         final ImageCapture imageCapture = new ImageCapture(imageCaptureConfig);
-
-
-//        final ImageAnalysisConfig imageAnalysisConfig =
-//                new ImageAnalysisConfig.Builder()
-//                        .setTargetResolution(screen)
-//                        .setImageReaderMode(ImageAnalysis.ImageReaderMode.ACQUIRE_LATEST_IMAGE)
-//                        .build();
-//
-//        final ImageAnalysis imageAnalysis = new ImageAnalysis(imageAnalysisConfig);
-//        imageAnalysis.setAnalyzer(
-//                (image, rotationDegrees) -> {
-//                    if (SystemClock.elapsedRealtime() - mLastAnalysisResultTime < 500) {
-//                        return;
-//                    }
-//
-//                    exposure_required = analyzeImage(image, rotationDegrees);
-//                    if (exposure_required != -1) {
-//                        mLastAnalysisResultTime = SystemClock.elapsedRealtime();
-////                        runOnUiThread(() -> applyToUiAnalyzeImageResult(result));
-//                    }
-//                });
-
-        MeteringPointFactory factory = new SensorOrientedMeteringPointFactory(
-                screenWidth, screenHeight);
-        MeteringPoint point = factory.createPoint(x, y);
-        FocusMeteringAction action = FocusMeteringAction.Builder.from(point,
-                FocusMeteringAction.MeteringMode.AF_ONLY)
-                .addPoint(point2, FocusMeteringAction.MeteringMode.AE_ONLY) // could have many
-                .setAutoFocusCallback(new FocusMeteringAction.OnAutoFocusListener() {
-                    public void onFocusCompleted(boolean isSuccess) {
-                    }
-                })
-                // auto calling cancelFocusAndMetering in 5 seconds
-                .setAutoCancelDuration(5, TimeUnit.SECONDS)
-                .build();
-
 
         imageCaptureView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -386,7 +350,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
         }
     }
 
-    private boolean allPermissionsGranted() {
+    public boolean allPermissionsGranted() {
 
         for (String permission : REQUIRED_PERMISSIONS) {
             if (ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED) {
