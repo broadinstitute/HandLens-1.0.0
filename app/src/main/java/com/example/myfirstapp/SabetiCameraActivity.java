@@ -226,8 +226,8 @@ public class SabetiCameraActivity extends AppCompatActivity {
         Size screen = new Size(screenWidth, screenHeight);
         Rational aspectRatio = new Rational(textureView.getWidth(), textureView.getHeight());
         Log.d("SabetiCameraActivity/",
-                "textureView.getWidt()" + Integer.toString(textureView.getWidth())
-                + " textureView.getHeight()" + Integer.toString(textureView.getHeight()));
+                "imageView.getWidt()" + Integer.toString(textureView.getWidth())
+                + " imageView.getHeight()" + Integer.toString(textureView.getHeight()));
         PreviewConfig previewConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
         Preview preview = new Preview(previewConfig);
 

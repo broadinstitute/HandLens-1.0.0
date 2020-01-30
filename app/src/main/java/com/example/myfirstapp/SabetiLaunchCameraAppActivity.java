@@ -9,14 +9,12 @@ import androidx.core.content.FileProvider;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -25,6 +23,8 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+
+import static com.example.myfirstapp.MainActivity.EXTRA_MESSAGE;
 
 public class SabetiLaunchCameraAppActivity extends AppCompatActivity {
     private ImageView imageView;
@@ -39,7 +39,7 @@ public class SabetiLaunchCameraAppActivity extends AppCompatActivity {
         if (allPermissionsGranted()) {
             // Get the Intent that started this activity and extract the string
             Intent intent = getIntent();
-            String message = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
+            String message = intent.getStringExtra(EXTRA_MESSAGE);
             dispatchTakePictureIntent(message);
         } else {
             ActivityCompat.requestPermissions(this,
@@ -79,30 +79,35 @@ public class SabetiLaunchCameraAppActivity extends AppCompatActivity {
 //            Bundle extras = data.getExtras();
 //            Bitmap imageBitmap = (Bitmap) extras.get("data");
 //            imageView.setImageBitmap(imageBitmap);
-            Log.d("SabetiLaunchCameraAp...", "setting ImageView");
-            if (photoFile != null && photoFile.exists()) {
-                Bitmap sourceImage = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
-                Matrix rotationMatrix = new Matrix();
-                rotationMatrix.postRotate(getCameraPhotoOrientation(this,
-                        FileProvider.getUriForFile(this,
-                        "com.example.myfirstapp.provider",
-                        photoFile),
-                        photoFile.getAbsolutePath()));
-                imageView.setImageBitmap(Bitmap.createBitmap(sourceImage, 0, 0,
-                        sourceImage.getWidth(), sourceImage.getHeight(), rotationMatrix, true));
-//                imageView.setImageBitmap(BitmapFactory.decodeFile(photoFile.getAbsolutePath()));
-//                imageView.setImageURI(Uri.fromFile(photoFile));
-//                imageView.setRotation(getCameraPhotoOrientation(this,
+
+            Intent intent = new Intent(this, ImageViewBoxSelectActivity.class);
+            intent.putExtra(EXTRA_MESSAGE, photoFile.getAbsolutePath());
+            startActivity(intent);
+//
+//            Log.d("SabetiLaunchCameraAp...", "setting ImageView");
+//            if (photoFile != null && photoFile.exists()) {
+//                Bitmap sourceImage = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
+//                Matrix rotationMatrix = new Matrix();
+//                rotationMatrix.postRotate(getCameraPhotoOrientation(this,
 //                        FileProvider.getUriForFile(this,
 //                        "com.example.myfirstapp.provider",
 //                        photoFile),
 //                        photoFile.getAbsolutePath()));
-            }
+//                imageView.setImageBitmap(Bitmap.createBitmap(sourceImage, 0, 0,
+//                        sourceImage.getWidth(), sourceImage.getHeight(), rotationMatrix, true));
+////                imageView.setImageBitmap(BitmapFactory.decodeFile(photoFile.getAbsolutePath()));
+////                imageView.setImageURI(Uri.fromFile(photoFile));
+////                imageView.setRotation(getCameraPhotoOrientation(this,
+////                        FileProvider.getUriForFile(this,
+////                        "com.example.myfirstapp.provider",
+////                        photoFile),
+////                        photoFile.getAbsolutePath()));
+//            }
 
         }
     }
 
-    public int getCameraPhotoOrientation(Context context, Uri imageUri,
+    public static int getCameraPhotoOrientation(Context context, Uri imageUri,
                                          String imagePath) {
         // source: https://stackoverflow.com/a/36995847
         // MIT license (https://meta.stackexchange.com/questions/271080)
@@ -161,13 +166,19 @@ public class SabetiLaunchCameraAppActivity extends AppCompatActivity {
 
         if (requestCode == MainActivity.REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
-                dispatchTakePictureIntent(getIntent().getStringExtra(MainActivity.EXTRA_MESSAGE));
+                dispatchTakePictureIntent(getIntent().getStringExtra(EXTRA_MESSAGE));
             } else {
                 Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show();
                 finish();
             }
         }
     }
+
+    @Override
+    public void onBackPressed() {
+        startActivity(new Intent(this, MainActivity.class));
+    }
+
 
     public boolean allPermissionsGranted() {
 
