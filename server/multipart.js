@@ -38,7 +38,7 @@ app.post(
   }).single('upload'), function(req, res) {
       console.log('here')
       const { spawn } = require('child_process');
-      const pyProg = spawn('python3', ['/home/sameedmsiddiqui/SHERLOCK-reader/notebooks/sherlock_reader/strip_detection.py', '--image_file', '/home/sameedmsiddiqui/jdserver/uploads/' + req.file.filename, '--prediction_mode']);
+      const pyProg = spawn('python3', ['../scripts/python/strip_detection.py', '--image_file', 'uploads/' + req.file.filename, '--prediction_mode']);
 
       pyProg.stdout.on('data', function(data) {
           console.log(data.toString());
