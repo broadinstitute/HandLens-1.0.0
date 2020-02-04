@@ -36,7 +36,6 @@ app.post(
   multer({
     storage: storage
   }).single('upload'), function(req, res) {
-      console.log('here')
       const { spawn } = require('child_process');
       const pyProg = spawn('python3', ['../scripts/python/strip_detection.py', '--image_file', 'uploads/' + req.file.filename, '--prediction_mode']);
 

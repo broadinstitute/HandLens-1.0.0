@@ -17,8 +17,6 @@ else:
     from .strip_analysis import correct_input_image
     from .strip_analysis import convert_image_to_linear_signal
 
-
-
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -40,7 +38,7 @@ else:
     output_prefix = os.path.join(output_dir, os.path.splitext(image_file)[0])
 
 image = cv2.imread(image_file)
-image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
+# image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
 image = cv2.GaussianBlur(image, (5, 5), 0)
 
 # Parameters
@@ -106,9 +104,9 @@ maxControlPeakPos = 390
 
 # Red is at the beginning/end of the hue range, so it covers the [0-15] and the [170, 180]
 # (hue in OpenCV varies  between 0 and 180 degrees)
-lower_red1 = np.array([0, 70, 50])
+lower_red1 = np.array([0, 50, 50])
 upper_red1 = np.array([13, 255, 255])
-lower_red2 = np.array([170, 70, 50])
+lower_red2 = np.array([170, 50, 50])
 upper_red2 = np.array([180, 255, 255])
 
 # Green is between 20 and 90 (these ranges can be adjusted)
@@ -116,9 +114,9 @@ lower_green = np.array([20, 70, 50])
 upper_green = np.array([83, 255, 255])
 
 # We can also use a large color range to encapsulate both red and green:
-lower_redgreen1 = np.array([0, 75, 50])
+lower_redgreen1 = np.array([0, 50, 50])
 upper_redgreen1 = np.array([83, 255, 255])
-lower_redgreen2 = np.array([170, 75, 50])
+lower_redgreen2 = np.array([170, 50, 50])
 upper_redgreen2 = np.array([180, 255, 255])
 
 
@@ -264,7 +262,7 @@ def getTruthValueFromFile(filename):
 
 # Processing Step 1: detecting the colored area in the strips
 image = cv2.imread(image_file)
-image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
+# image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
 image = cv2.GaussianBlur(image, (5, 5), 0)
 
 # First, convert the image to HSV color space, which makes the color detection straightforward
