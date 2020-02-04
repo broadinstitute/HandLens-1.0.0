@@ -40,6 +40,7 @@ else:
     output_prefix = os.path.join(output_dir, os.path.splitext(image_file)[0])
 
 image = cv2.imread(image_file)
+image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
 image = cv2.GaussianBlur(image, (5, 5), 0)
 
 # Parameters
@@ -48,7 +49,7 @@ w = image.shape[0]
 h = image.shape[1]
 
 # The maximum and minimum allowed ratios of the sides of the green box
-maxGreenBoxRatio = 140.0 / 528
+maxGreenBoxRatio = 160.0 / 528
 minGreenBoxRatio = 102.0 / 578
 
 # The maximum allowed ratio of the sides of the final deteted strip
@@ -105,19 +106,19 @@ maxControlPeakPos = 390
 
 # Red is at the beginning/end of the hue range, so it covers the [0-15] and the [170, 180]
 # (hue in OpenCV varies  between 0 and 180 degrees)
-lower_red1 = np.array([0, 50, 50])
+lower_red1 = np.array([0, 70, 50])
 upper_red1 = np.array([13, 255, 255])
-lower_red2 = np.array([170, 50, 50])
+lower_red2 = np.array([170, 70, 50])
 upper_red2 = np.array([180, 255, 255])
 
 # Green is between 20 and 90 (these ranges can be adjusted)
-lower_green = np.array([20, 50, 50])
+lower_green = np.array([20, 70, 50])
 upper_green = np.array([83, 255, 255])
 
 # We can also use a large color range to encapsulate both red and green:
-lower_redgreen1 = np.array([0, 50, 50])
+lower_redgreen1 = np.array([0, 75, 50])
 upper_redgreen1 = np.array([83, 255, 255])
-lower_redgreen2 = np.array([170, 50, 50])
+lower_redgreen2 = np.array([170, 75, 50])
 upper_redgreen2 = np.array([180, 255, 255])
 
 
@@ -263,6 +264,7 @@ def getTruthValueFromFile(filename):
 
 # Processing Step 1: detecting the colored area in the strips
 image = cv2.imread(image_file)
+image = cv2.resize(image, (0, 0), fx=0.25, fy=0.25)
 image = cv2.GaussianBlur(image, (5, 5), 0)
 
 # First, convert the image to HSV color space, which makes the color detection straightforward
@@ -281,7 +283,12 @@ redgreen_mask1 = cv2.inRange(hsv, lower_redgreen1, upper_redgreen1)
 redgreen_mask2 = cv2.inRange(hsv, lower_redgreen2, upper_redgreen2)
 mask = redgreen_mask1 + redgreen_mask2
 
-# plt.imshow(cv2.cvtColor(red_mask, cv2.COLOR_GRAY2RGB))
+kernel = np.ones((10,10), np.uint8)
+red_mask = cv2.erode(red_mask, kernel, iterations=1)
+red_mask = cv2.dilate(red_mask, kernel, iterations=1)
+mask = cv2.erode(mask, kernel, iterations=1)
+mask = cv2.dilate(mask, kernel, iterations=1)
+                        
 
 # # fix image brighness by normalizing to red channel
 red_hsv_v = cv2.mean(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), red_mask)[2]
@@ -824,7 +831,7 @@ if prediction_mode:
         truths.append(max_detector.predict_signal_truth(
             convert_image_to_linear_signal(correct_input_image(nimg, 'clahe'))))
     if len(truths) == 2:
-        print(truths[1])
+        print(truths)
     else:
         print(truths)
     sys.stdout.flush()
