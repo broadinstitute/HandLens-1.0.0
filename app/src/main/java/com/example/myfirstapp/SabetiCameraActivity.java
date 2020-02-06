@@ -3,6 +3,7 @@ package com.example.myfirstapp;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.camera2.impl.Camera2CaptureRequestBuilder;
 import androidx.camera.core.CameraX;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureConfig;
@@ -13,37 +14,40 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 
-
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Canvas;
-import android.graphics.Color;
+import android.graphics.Bitmap;
 import android.graphics.Matrix;
-import android.graphics.Paint;
+import android.graphics.SurfaceTexture;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCaptureSession;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.SystemClock;
 import android.util.Log;
 import android.util.Rational;
 import android.util.Size;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
-import static android.view.View.LAYOUT_DIRECTION_INHERIT;
+import static com.example.myfirstapp.MainActivity.EXTRA_MESSAGE;
 
 
 public class SabetiCameraActivity extends AppCompatActivity {
@@ -65,193 +69,43 @@ public class SabetiCameraActivity extends AppCompatActivity {
     private int viewHeight;
     private int viewWidth;
 
-    private class Box extends View {
-        private Paint paint = new Paint();
-        private ScaleGestureDetector mScaleGestureDetector;
-        private float mScaleFactor = 1.f;
-        private static final int INVALID_POINTER_ID = -1;
-        private int mActivePointerId = INVALID_POINTER_ID;
-        private float mPrevX;
-        private float mPrevY;
-        private float mPosX = 0f;
-        private float mPosY = 0f;
-
-        private ImageButton mImageButton;
-
-        Box(Context context, ImageButton imageButton) {
-            super(context);
-            mImageButton = imageButton;
-            mScaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
-//            mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener());
-
-        }
-
-        @Override
-        public boolean onTouchEvent(MotionEvent ev) {
-            // Let the ScaleGestureDetector inspect all events.
-            boolean retVal = mScaleGestureDetector.onTouchEvent(ev);
-            final int eventAction = ev.getAction();
-            switch (eventAction & MotionEvent.ACTION_MASK) {
-                case MotionEvent.ACTION_DOWN: {
-                    mPrevX = ev.getX();
-                    mPrevY = ev.getY();
-                    mActivePointerId = ev.getPointerId(0);
-                    break;
-                }
-
-                case MotionEvent.ACTION_MOVE: {
-                    int pointerIndex = ev.findPointerIndex(mActivePointerId);
-                    float currX = ev.getX(pointerIndex);
-                    float currY = ev.getY(pointerIndex);
-                    // if ScaleGestureDetector is in progress, don't move
-                    if (!mScaleGestureDetector.isInProgress()) {
-                        float dx = currX - mPrevX;
-                        float dy = currY - mPrevY;
-
-                        mPosX += dx;
-                        mPosY += dy;
-                        invalidate();
-                    }
-                    mPrevX = currX;
-                    mPrevY = currY;
-                    break;
-                }
-
-                case MotionEvent.ACTION_POINTER_UP: {
-                    final int pointerIndex = (ev.getAction() & MotionEvent.ACTION_POINTER_INDEX_MASK) >> MotionEvent.ACTION_POINTER_INDEX_SHIFT;
-                    final int pointerId = ev.getPointerId(pointerIndex);
-                    if (pointerId == mActivePointerId) {
-                        // pointerId was the active pointer on the up motion. We need to chose a new pointer
-                        final int newPointerIndex = pointerIndex == 0 ? 1 : 0;
-                        mPrevX = ev.getX(newPointerIndex);
-                        mPrevY = ev.getY(newPointerIndex);
-                        mActivePointerId = ev.getPointerId(newPointerIndex);
-                    }
-                    break;
-                }
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL: {
-                    mActivePointerId = INVALID_POINTER_ID;
-                    break;
-                }
-
-            }
-            return true;
-        }
-
-
-        private class ScaleListener
-                extends ScaleGestureDetector.SimpleOnScaleGestureListener {
-            @Override
-            public boolean onScale(ScaleGestureDetector detector) {
-                mScaleFactor *= detector.getScaleFactor();
-
-//                pivotPointX = detector.getFocusX();
-//                pivotPointY = detector.getFocusY();
-                // Don't let the object get too small or too large.
-                mScaleFactor = Math.max(0.1f, Math.min(mScaleFactor, 5.0f));
-
-                // tell the View to redraw the Canvas
-                invalidate();
-                return true;
-            }
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) { // Override the onDraw() Method
-            super.onDraw(canvas);
-
-            canvas.save();
-            canvas.scale(mScaleFactor, mScaleFactor);
-            canvas.translate(mPosX, mPosY);
-
-            //center
-            float strip_ratio = 1372.0f / 82.0f;
-            int x0 = getWidth();
-            int y0 = getHeight();
-
-            int max_strips = 8;
-            int strip_buffer = 1; // how many strip widths between each strip
-            int total_width_strips = max_strips + max_strips * strip_buffer + strip_buffer;
-
-            float strip_width = x0 / total_width_strips;
-            float strip_height = strip_ratio * strip_width;
-
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setColor(Color.GREEN);
-            paint.setStrokeWidth(x0 / 100);
-            //draw guide box
-            canvas.drawRect(x0 - strip_width * 2, (y0 - strip_height) / 2, x0 - strip_width, y0 - (y0 - strip_height) / 2, paint);
-            paint.setStrokeWidth(x0 / 200);
-            paint.setTextSize(16 * getResources().getDisplayMetrics().density);
-            canvas.drawText("Ctrl", x0 - strip_width * 2, (y0 - strip_height) / 2 - (y0 - strip_height) / 20, paint);
-            ((ViewGroup) mImageButton.getParent()).removeView(mImageButton);
-            ((ViewGroup) this.getParent()).addView(mImageButton);
-
-            canvas.restore();
-        }
-    }
-
+    private int rearCameradId;
+    String cameraIdFacing;
+    int cameraFacing;
+    Size previewSize;
+    CameraManager manager;
+    HandlerThread backgroundThread;
+    Handler backgroundHandler;
+    CameraDevice.StateCallback stateCallback;
+    CameraDevice cameraDevice;
+    TextureView.SurfaceTextureListener surfaceTextureListener;
+    CaptureRequest captureRequest;
+    CameraCaptureSession cameraCaptureSession;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera);
 
+        // set instance variables
         textureView = findViewById(R.id.view_finder);
-
         textureView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         viewWidth = textureView.getMeasuredWidth();
         viewHeight = textureView.getMeasuredHeight();
-
         mLastAnalysisResultTime = SystemClock.elapsedRealtime();
+        cameraFacing = CameraCharacteristics.LENS_FACING_BACK;
+        manager = (CameraManager) getSystemService(CAMERA_SERVICE);
 
-        if (allPermissionsGranted()) {
-            // Get the Intent that started this activity and extract the string
-            Intent intent = getIntent();
-            String message = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
-            startCamera(message);
-        } else {
-            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
-        }
-    }
+        // get sample name
+        Intent startingIntent = getIntent();
+        String sampleName = startingIntent.getStringExtra(EXTRA_MESSAGE);
 
-    private void startCamera(String sampleName) {
-        // Code inspired by https://github.com/journaldev/journaldev/tree/master/Android/AndroidCameraX
-        // (MIT license)
-        CameraX.unbindAll();
-        // Set up preview screen based
-        final int screenWidth = textureView.getWidth();
-        final int screenHeight = textureView.getHeight();
-        Size screen = new Size(screenWidth, screenHeight);
-        Rational aspectRatio = new Rational(textureView.getWidth(), textureView.getHeight());
         Log.d("SabetiCameraActivity/",
-                "imageView.getWidt()" + Integer.toString(textureView.getWidth())
-                + " imageView.getHeight()" + Integer.toString(textureView.getHeight()));
-        PreviewConfig previewConfig = new PreviewConfig.Builder().setTargetAspectRatio(aspectRatio).setTargetResolution(screen).build();
-        Preview preview = new Preview(previewConfig);
+                "imageView.getWidth()" + Integer.toString(textureView.getWidth())
+                        + " imageView.getHeight()" + Integer.toString(textureView.getHeight()));
 
         ImageButton imageCaptureView = findViewById(R.id.imgCapture);
-
-        Intent resultsPageIntent = new Intent(this, ResultsPageActivity.class);
-        Box box = new Box(this, imageCaptureView);
-        addContentView(box, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        preview.setOnPreviewOutputUpdateListener(
-                new Preview.OnPreviewOutputUpdateListener() {
-                    @Override
-                    public void onUpdated(Preview.PreviewOutput previewOutput) {
-                        ViewGroup viewParent = (ViewGroup) textureView.getParent();
-                        viewParent.removeView(textureView);
-                        viewParent.addView(textureView, 0);
-                        textureView.setSurfaceTexture(previewOutput.getSurfaceTexture());
-
-                        updateTransform();
-                    }
-                });
-
-        ImageCaptureConfig imageCaptureConfig = new ImageCaptureConfig.Builder().setCaptureMode(ImageCapture.CaptureMode.MIN_LATENCY)
-                .setTargetRotation(getWindowManager().getDefaultDisplay().getRotation()).build();
-        final ImageCapture imageCapture = new ImageCapture(imageCaptureConfig);
+        Intent nextIntent = new Intent(this, ImageViewBoxSelectActivity.class);
 
         imageCaptureView.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -273,68 +127,256 @@ public class SabetiCameraActivity extends AppCompatActivity {
                 File imageFile = new File(outputDirectory, imageFileName + ".jpg");
                 String fileName = imageFile.toString();
 
-                imageCapture.takePicture(imageFile,
-                        new ImageCapture.OnImageSavedListener() {
-                            @Override
-                            public void onImageSaved(@NonNull File file) {
-                                String msg = "Pic captured at " + file.getAbsolutePath();
-                                Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
-                                resultsPageIntent.putExtra(IMAGE_FILE_NAME, fileName);
-                                startActivity(resultsPageIntent);
-                            }
+                FileOutputStream outputPhoto = null;
+                try {
+                    outputPhoto = new FileOutputStream(imageFile);
+                    textureView.getBitmap()
+                            .compress(Bitmap.CompressFormat.PNG, 100, outputPhoto);
+                    nextIntent.putExtra(EXTRA_MESSAGE, imageFile.getAbsolutePath());
+                    startActivity(nextIntent);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    try {
+                        if (outputPhoto != null) {
+                            outputPhoto.close();
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
 
-                            @Override
-                            public void onError(ImageCapture.ImageCaptureError imageCaptureError,
-                                                @NonNull String message, @Nullable Throwable cause) {
-                                String msg = "Pic capture failed : " + message + "\nat " + fileName;
-                                Toast.makeText(getBaseContext(), msg, Toast.LENGTH_LONG).show();
-                                if (cause != null) {
-                                    cause.printStackTrace();
-                                }
-                            }
-                        });
             }
         });
 
+        if (allPermissionsGranted()) {
+            // Get the Intent that started this activity and extract the string
+            Intent intent = getIntent();
+            String message = intent.getStringExtra(MainActivity.EXTRA_MESSAGE);
 
-        //bind to lifecycle:
-        CameraX.bindToLifecycle((LifecycleOwner) this, preview, imageCapture);
+            surfaceTextureListener = new TextureView.SurfaceTextureListener() {
+
+                @Override
+                public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
+
+                }
+
+                @Override
+                public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
+
+                }
+
+                @Override
+                public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
+                    setUpCamera();
+                    openCamera();
+                }
+
+                @Override
+                public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+                    return false;
+                }
+            };
+
+            stateCallback = new CameraDevice.StateCallback() {
+                @Override
+                public void onOpened(CameraDevice cd) {
+                    cameraDevice = cd;
+                    createPreviewSession();
+                }
+
+                @Override
+                public void onDisconnected(CameraDevice cd) {
+                    cameraDevice.close();
+                    cameraDevice = null;
+                }
+
+                @Override
+                public void onError(CameraDevice cd, int error) {
+                    cameraDevice.close();
+                    cameraDevice = null;
+                }
+            };
+
+        } else {
+            ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS);
+        }
     }
 
-    private void updateTransform() {
-        Matrix mx = new Matrix();
-        float w = textureView.getMeasuredWidth();
-        float h = textureView.getMeasuredHeight();
+    private void createPreviewSession() {
+        try {
+            SurfaceTexture surfaceTexture = textureView.getSurfaceTexture();
+            surfaceTexture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            Surface previewSurface = new Surface(surfaceTexture);
+            CaptureRequest.Builder captureRequestBuilder =
+                    cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            captureRequestBuilder.addTarget(previewSurface);
 
-        float cX = w / 2f;
-        float cY = h / 2f;
+            cameraDevice.createCaptureSession(Collections.singletonList(previewSurface),
+                    new CameraCaptureSession.StateCallback() {
 
-        int rotationDgr;
-        int rotation = (int) textureView.getRotation();
+                        @Override
+                        public void onConfigured(CameraCaptureSession ccSession) {
+                            if (cameraDevice == null) {
+                                return;
+                            }
 
-        switch (rotation) {
-            case Surface.ROTATION_0:
-                rotationDgr = 0;
-                break;
-            case Surface.ROTATION_90:
-                rotationDgr = 90;
-                break;
-            case Surface.ROTATION_180:
-                rotationDgr = 180;
-                break;
-            case Surface.ROTATION_270:
-                rotationDgr = 270;
-                break;
-            default:
-                return;
+                            try {
+                                captureRequest = captureRequestBuilder.build();
+                                cameraCaptureSession = ccSession;
+                                cameraCaptureSession.setRepeatingRequest(captureRequest,
+                                        null, backgroundHandler);
+                            } catch (CameraAccessException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        @Override
+                        public void onConfigureFailed(CameraCaptureSession ccSession) {
+
+                        }
+                    }, backgroundHandler);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        openBackgroundThread();
+        if (textureView.isAvailable()) {
+            setUpCamera();
+            openCamera();
+        } else {
+            textureView.setSurfaceTextureListener(surfaceTextureListener);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        closeCamera();
+        closeBackgroundThread();
+    }
+
+    private void closeCamera() {
+        if (cameraCaptureSession != null) {
+            cameraCaptureSession.close();
+            cameraCaptureSession = null;
         }
 
-        mx.postRotate((float) rotationDgr, cX, cY);
-        textureView.setTransform(mx);
+        if (cameraDevice != null) {
+            cameraDevice.close();
+            cameraDevice = null;
+        }
     }
 
-    public double analyzeImage(ImageProxy image, int rotationDegrees) {
-        return 0;
+    private void closeBackgroundThread() {
+        if (backgroundHandler != null) {
+            backgroundThread.quitSafely();
+            backgroundThread = null;
+            backgroundHandler = null;
+        }
+    }
+
+    private void setUpCamera() {
+        try {
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics chars = manager.getCameraCharacteristics(cameraId);
+                if (chars.get(CameraCharacteristics.LENS_FACING) == cameraFacing) {
+                    previewSize = chooseOptimalSize(chars.get(
+                            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP).getOutputSizes(SurfaceTexture.class),
+                            viewWidth, viewHeight);
+                    cameraIdFacing = cameraId;
+                }
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Size chooseOptimalSize(Size[] outputSizes, int width, int height) {
+        double preferredRatio = height / (double) width;
+        Size currentOptimalSize = outputSizes[0];
+        double currentOptimalRatio = currentOptimalSize.getWidth() / (double) currentOptimalSize.getHeight();
+        for (Size currentSize : outputSizes) {
+            double currentRatio = currentSize.getWidth() / (double) currentSize.getHeight();
+            if (Math.abs(preferredRatio - currentRatio) <
+                    Math.abs(preferredRatio - currentOptimalRatio)) {
+                currentOptimalSize = currentSize;
+                currentOptimalRatio = currentRatio;
+            }
+        }
+        return currentOptimalSize;
+    }
+
+    private void openCamera() {
+        try {
+            if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
+                manager.openCamera(cameraIdFacing, stateCallback, backgroundHandler);
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void openBackgroundThread() {
+        backgroundThread = new HandlerThread("camera_background_thread");
+        backgroundThread.start();
+        backgroundHandler = new Handler(backgroundThread.getLooper());
+    }
+
+    private void startCamera(String sampleName) {
+
+        Log.d("SabetiCameraActivity/",
+                "imageView.getWidth()" + Integer.toString(textureView.getWidth())
+                        + " imageView.getHeight()" + Integer.toString(textureView.getHeight()));
+
+        ImageButton imageCaptureView = findViewById(R.id.imgCapture);
+        Intent resultsPageIntent = new Intent(this, ResultsPageActivity.class);
+
+        imageCaptureView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String timeStamp =
+                        new SimpleDateFormat(CAMERA_DATE_FORMAT,
+                                Locale.getDefault()).format(new Date());
+                File storageDir =
+                        getExternalFilesDir(null);
+                String imageFileName = "IMG_" + sampleName;
+                File outputDirectory = new File(storageDir, RESULTS_DIRECTORY + "/IMG_" + timeStamp);
+//                String fileName = storageDir + "/results/" + imageFileName + ".jpg";
+                if (!outputDirectory.exists()) {
+                    if (!outputDirectory.mkdirs()) {
+//                        Log.e(LogHelper.LogTag, "Failed to create directory: " + outputDirectory.getAbsolutePath());
+                        outputDirectory = null;
+                    }
+                }
+                File imageFile = new File(outputDirectory, imageFileName + ".jpg");
+                String fileName = imageFile.toString();
+
+                FileOutputStream outputPhoto = null;
+                try {
+                    outputPhoto = new FileOutputStream(imageFile);
+                    textureView.getBitmap()
+                            .compress(Bitmap.CompressFormat.PNG, 100, outputPhoto);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                } finally {
+                    try {
+                        if (outputPhoto != null) {
+                            outputPhoto.close();
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+            }
+        });
+
     }
 
     @Override
@@ -342,7 +384,7 @@ public class SabetiCameraActivity extends AppCompatActivity {
 
         if (requestCode == REQUEST_CODE_PERMISSIONS) {
             if (allPermissionsGranted()) {
-                startCamera(getIntent().getStringExtra(MainActivity.EXTRA_MESSAGE));
+                ;//startCamera(getIntent().getStringExtra(MainActivity.EXTRA_MESSAGE));
             } else {
                 Toast.makeText(this, "Permissions not granted by the user.", Toast.LENGTH_SHORT).show();
                 finish();
