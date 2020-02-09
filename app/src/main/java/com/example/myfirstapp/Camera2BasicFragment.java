@@ -8,6 +8,7 @@ package com.example.myfirstapp;
 
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -78,7 +79,7 @@ import static com.example.myfirstapp.MainActivity.EXTRA_MESSAGE;
 import static com.example.myfirstapp.SabetiLaunchCameraAppActivity.REQUEST_IMAGE_CAPTURE;
 
 public class Camera2BasicFragment extends Fragment
-        implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
+        implements View.OnTouchListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
      * Conversion from screen rotation to JPEG orientation.
@@ -433,11 +434,13 @@ public class Camera2BasicFragment extends Fragment
         return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        view.findViewById(R.id.picture).setOnClickListener(this);
-        view.findViewById(R.id.info).setOnClickListener(this);
+        view.findViewById(R.id.picture).setOnTouchListener(this);
+        view.findViewById(R.id.info).setOnTouchListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
+        mTextureView.setOnTouchListener(this);
     }
 
     @Override
@@ -446,13 +449,13 @@ public class Camera2BasicFragment extends Fragment
         mFile = createImageFile();
     }
 
-    private File createImageFile()  {
+    private File createImageFile() {
         // Create an image file name
         String timeStamp =
                 new SimpleDateFormat(MainActivity.CAMERA_DATE_FORMAT,
                         Locale.getDefault()).format(new Date());
         File storageDir = getActivity().getExternalFilesDir(null);
-        String imageFileName = "IMG_" +  ((CameraActivity)getActivity()).sampleName;
+        String imageFileName = "IMG_" + ((CameraActivity) getActivity()).sampleName;
         File outputDirectory = new File(storageDir, MainActivity.RESULTS_DIRECTORY + "/IMG_" + timeStamp);
 //                String fileName = storageDir + "/results/" + imageFileName + ".jpg";
         if (!outputDirectory.exists()) {
@@ -821,6 +824,10 @@ public class Camera2BasicFragment extends Fragment
         }
     }
 
+    private void setFocusArea(MotionEvent event) {
+        ;
+    }
+
     /**
      * Run the precapture sequence for capturing a still image. This method should be called when
      * we get a response in {@link #mCaptureCallback} from {@link #lockFocus()}.
@@ -870,7 +877,7 @@ public class Camera2BasicFragment extends Fragment
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
-                                               @NonNull TotalCaptureResult result){
+                                               @NonNull TotalCaptureResult result) {
                     showToast("Saved image: " + mFile);
                     Log.d(TAG, mFile.toString());
                     unlockFocus();
@@ -918,14 +925,13 @@ public class Camera2BasicFragment extends Fragment
                     mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
-        }
-        catch (NullPointerException n) {
+        } catch (NullPointerException n) {
             n.printStackTrace();
         }
     }
 
     @Override
-    public void onClick(View view) {
+    public boolean onTouch(View view, MotionEvent motionEvent) {
         switch (view.getId()) {
             case R.id.picture: {
                 takePicture();
@@ -941,7 +947,62 @@ public class Camera2BasicFragment extends Fragment
                 }
                 break;
             }
+            case R.id.texture: {
+                int pointerId = motionEvent.getPointerId(0);
+                int pointerIndex = motionEvent.findPointerIndex(pointerId);
+                Log.e("Camera2BasicFragment", "Touch recognized");
+                // Get the pointer's current position
+                float x = motionEvent.getX(pointerIndex);
+                float y = motionEvent.getY(pointerIndex);
+                Rect touchRect = new Rect(
+                        (int) (x - 100),
+                        (int) (y - 100),
+                        (int) (x + 100),
+                        (int) (y + 100));
+
+
+                if (mCameraId == null) return false;
+                Activity activity = getActivity();
+                CameraManager cm = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+                CameraCharacteristics cc = null;
+                try {
+                    cc = cm.getCameraCharacteristics(mCameraId);
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
+
+
+                MeteringRectangle focusArea = new MeteringRectangle(touchRect, MeteringRectangle.METERING_WEIGHT_DONT_CARE);
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
+                try {
+                    mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
+                            mBackgroundHandler);
+                    // After this, the camera will go back to the normal state of preview.
+                    mState = STATE_PREVIEW;
+                } catch (CameraAccessException e) {
+                    // log
+                }
+
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS,
+                        new MeteringRectangle[]{focusArea});
+                mPreviewRequestBuilder
+                        .set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{focusArea});
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
+                        CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                        CameraMetadata.CONTROL_AF_TRIGGER_START);
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
+                        CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
+                try {
+                    mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
+                            mBackgroundHandler);
+                    /* mManualFocusEngaged = true;*/
+                } catch (CameraAccessException e) {
+                    // error handling
+                }
+            }
         }
+        return true;
     }
 
     private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
