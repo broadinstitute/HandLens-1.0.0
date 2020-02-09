@@ -250,6 +250,9 @@ public class Camera2BasicFragment extends Fragment
         @Override
         public void onImageAvailable(ImageReader reader) {
             mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+            Intent intent = new Intent(getActivity(), ImageViewBoxSelectActivity.class);
+            intent.putExtra(EXTRA_MESSAGE, mFile.getAbsolutePath());
+            startActivity(intent);
         }
 
     };
@@ -427,115 +430,23 @@ public class Camera2BasicFragment extends Fragment
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.fragment_camera2_basic, container, false);
-//        view.setOnTouchListener(new View.OnTouchListener(){
-//            public boolean onTouch(View view, MotionEvent motionEvent){
-//                handleFocus(motionEvent);
-//                return true;
-//            }
-//        });
-//        view.setOnTouchListener(new View.OnTouchListener(){
-//            public boolean onTouch(View view, MotionEvent motionEvent) {
-//                final int actionMasked = motionEvent.getActionMasked();
-//                if (actionMasked != MotionEvent.ACTION_DOWN) {
-//                    return false;
-//                }
-//                if (mManualFocusEngaged) {
-//                    Log.d(TAG, "Manual focus already engaged");
-//                    return true;
-//                }
-//
-//                final Rect sensorArraySize = mCameraInfo.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-//
-//                //TODO: here I just flip x,y, but this needs to correspond with the sensor orientation (via SENSOR_ORIENTATION)
-//                final int y = (int)((motionEvent.getX() / (float)view.getWidth())  * (float)sensorArraySize.height());
-//                final int x = (int)((motionEvent.getY() / (float)view.getHeight()) * (float)sensorArraySize.width());
-//                final int halfTouchWidth  = 150; //(int)motionEvent.getTouchMajor(); //TODO: this doesn't represent actual touch size in pixel. Values range in [3, 10]...
-//                final int halfTouchHeight = 150; //(int)motionEvent.getTouchMinor();
-//                MeteringRectangle focusAreaTouch = new MeteringRectangle(Math.max(x - halfTouchWidth,  0),
-//                        Math.max(y - halfTouchHeight, 0),
-//                        halfTouchWidth  * 2,
-//                        halfTouchHeight * 2,
-//                        MeteringRectangle.METERING_WEIGHT_MAX - 1);
-//
-//                CameraCaptureSession.CaptureCallback captureCallbackHandler = new CameraCaptureSession.CaptureCallback() {
-//                    @Override
-//                    public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
-//                        super.onCaptureCompleted(session, request, result);
-//                        mManualFocusEngaged = false;
-//
-//                        if (request.getTag() == "FOCUS_TAG") {
-//                            //the focus trigger is complete -
-//                            //resume repeating (preview surface will get frames), clear AF trigger
-//                            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, null);
-//                            mCameraOps.setRepeatingRequest(mPreviewRequestBuilder.build(), null, null);
-//                        }
-//                    }
-//
-//                    @Override
-//                    public void onCaptureFailed(CameraCaptureSession session, CaptureRequest request, CaptureFailure failure) {
-//                        super.onCaptureFailed(session, request, failure);
-//                        Log.e(TAG, "Manual AF failure: " + failure);
-//                        mManualFocusEngaged = false;
-//                    }
-//                };
-//
-//                //first stop the existing repeating request
-//                mCameraOps.stopRepeating();
-//
-//                //cancel any existing AF trigger (repeated touches, etc.)
-//                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-//                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF);
-//                mCameraOps.capture(mPreviewRequestBuilder.build(), captureCallbackHandler, mBackgroundHandler);
-//
-//                //Now add a new AF trigger with focus region
-//                if (isMeteringAreaAFSupported()) {
-//                    mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{focusAreaTouch});
-//                }
-//                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-//                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_AUTO);
-//                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_START);
-//                mPreviewRequestBuilder.setTag("FOCUS_TAG"); //we'll capture this later for resuming the preview
-//
-//                //then we ask for a single request (not repeating!)
-//                mCameraOps.capture(mPreviewRequestBuilder.build(), captureCallbackHandler, mBackgroundHandler);
-//                mManualFocusEngaged = true;
-//
-//                return true;
-//            }
-//
-//            private boolean isMeteringAreaAFSupported() {
-//                return mCameraInfo.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) >= 1;
-//            }
-//        });
-        return view;
+        return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
     }
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         view.findViewById(R.id.picture).setOnClickListener(this);
         view.findViewById(R.id.info).setOnClickListener(this);
-        view.findViewById(R.id.texture).setOnClickListener(this);
-//        view.findViewById(R.id.texture).setOnTouchListener(new View.OnTouchListener(){
-//            public boolean onTouch(View view, MotionEvent motionEvent){
-//                handleFocus(motionEvent);
-//                return true;
-//            }
-//        });
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        try {
-            mFile = createImageFile();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        mFile = createImageFile();
     }
 
-    private File createImageFile() throws IOException {
+    private File createImageFile()  {
         // Create an image file name
         String timeStamp =
                 new SimpleDateFormat(MainActivity.CAMERA_DATE_FORMAT,
@@ -553,6 +464,7 @@ public class Camera2BasicFragment extends Fragment
         }
         return new File(outputDirectory, imageFileName + ".jpg");
     }
+
 
     @Override
     public void onResume() {
@@ -590,7 +502,7 @@ public class Camera2BasicFragment extends Fragment
                                            @NonNull int[] grantResults) {
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                ErrorDialog.newInstance("Request Permission")
+                ErrorDialog.newInstance("Request permission string")
                         .show(getChildFragmentManager(), FRAGMENT_DIALOG);
             }
         } else {
@@ -712,7 +624,6 @@ public class Camera2BasicFragment extends Fragment
                     .show(getChildFragmentManager(), FRAGMENT_DIALOG);
         }
     }
-
 
     /**
      * Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
@@ -853,61 +764,6 @@ public class Camera2BasicFragment extends Fragment
         }
     }
 
-    public void handleFocus(MotionEvent event) {
-        int pointerId = event.getPointerId(0);
-        int pointerIndex = event.findPointerIndex(pointerId);
-        Log.e("Camera2BasicFragment", "Touch recognized");
-// Get the pointer's current position
-        float x = event.getX(pointerIndex);
-        float y = event.getY(pointerIndex);
-        Rect touchRect = new Rect(
-                (int) (x - 100),
-                (int) (y - 100),
-                (int) (x + 100),
-                (int) (y + 100));
-
-
-        if (mCameraId == null) return;
-        Activity activity = getActivity();
-        CameraManager cm = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        CameraCharacteristics cc = null;
-        try {
-            cc = cm.getCameraCharacteristics(mCameraId);
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-
-
-        MeteringRectangle focusArea = new MeteringRectangle(touchRect, MeteringRectangle.METERING_WEIGHT_DONT_CARE);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CameraMetadata.CONTROL_AF_TRIGGER_CANCEL);
-        try {
-            mCaptureSession.capture(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
-            // After this, the camera will go back to the normal state of preview.
-            mState = STATE_PREVIEW;
-        } catch (CameraAccessException e) {
-            // log
-        }
-
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_REGIONS,
-                new MeteringRectangle[]{focusArea});
-        mPreviewRequestBuilder
-                .set(CaptureRequest.CONTROL_AF_REGIONS, new MeteringRectangle[]{focusArea});
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE,
-                CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                CameraMetadata.CONTROL_AF_TRIGGER_START);
-        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                CameraMetadata.CONTROL_AE_PRECAPTURE_TRIGGER_START);
-        try {
-            mCaptureSession.setRepeatingRequest(mPreviewRequestBuilder.build(), mCaptureCallback,
-                    mBackgroundHandler);
-            /* mManualFocusEngaged = true;*/
-        } catch (CameraAccessException e) {
-            // error handling
-        }
-    }
-
     /**
      * Configures the necessary {@link android.graphics.Matrix} transformation to `mTextureView`.
      * This method should be called after the camera preview size is determined in
@@ -988,9 +844,10 @@ public class Camera2BasicFragment extends Fragment
      * {@link #mCaptureCallback} from both {@link #lockFocus()}.
      */
     private void captureStillPicture() {
+        Log.d(TAG, "Attempting to save: " + mFile.toString());
         try {
-            final Activity parentActivity = getActivity();
-            if (null == parentActivity || null == mCameraDevice) {
+            final Activity activity = getActivity();
+            if (null == activity || null == mCameraDevice) {
                 return;
             }
             // This is the CaptureRequest.Builder that we use to take a picture.
@@ -1004,7 +861,7 @@ public class Camera2BasicFragment extends Fragment
             setAutoFlash(captureBuilder);
 
             // Orientation
-            int rotation = parentActivity.getWindowManager().getDefaultDisplay().getRotation();
+            int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
 
             CameraCaptureSession.CaptureCallback CaptureCallback
@@ -1013,8 +870,8 @@ public class Camera2BasicFragment extends Fragment
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
-                                               @NonNull TotalCaptureResult result) {
-                    showToast("Saved: " + mFile);
+                                               @NonNull TotalCaptureResult result){
+                    showToast("Saved image: " + mFile);
                     Log.d(TAG, mFile.toString());
                     unlockFocus();
                 }
@@ -1023,12 +880,9 @@ public class Camera2BasicFragment extends Fragment
             mCaptureSession.stopRepeating();
             mCaptureSession.abortCaptures();
             mCaptureSession.capture(captureBuilder.build(), CaptureCallback, null);
-
-            Intent intent = new Intent(parentActivity, ImageViewBoxSelectActivity.class);
-            intent.putExtra(EXTRA_MESSAGE, mFile.getAbsolutePath());
-            startActivity(intent);
         } catch (CameraAccessException e) {
             e.printStackTrace();
+            Log.d(TAG, "Failed to save: " + mFile.toString());
         }
     }
 
@@ -1065,6 +919,9 @@ public class Camera2BasicFragment extends Fragment
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+        catch (NullPointerException n) {
+            n.printStackTrace();
+        }
     }
 
     @Override
@@ -1078,50 +935,19 @@ public class Camera2BasicFragment extends Fragment
                 Activity activity = getActivity();
                 if (null != activity) {
                     new AlertDialog.Builder(activity)
-                            .setMessage("Welcome!")
+                            .setMessage("Instructions\n")
                             .setPositiveButton(android.R.string.ok, null)
                             .show();
                 }
                 break;
             }
-            case R.id.texture: {
-                break;
-            }
         }
     }
-
-//    @Override
-//    public boolean onTouch(View view, MotionEvent event) {
-//        switch (view.getId()) {
-//            case R.id.picture: {
-//                Log.e("Camera2BasicFragment", "Capture button pressed");
-//                takePicture();
-//                break;
-//            }
-//            case R.id.info: {
-//                Activity activity = getActivity();
-//                if (null != activity) {
-//                    new AlertDialog.Builder(activity)
-//                            .setMessage("Welcome!")
-//                            .setPositiveButton(android.R.string.ok, null)
-//                            .show();
-//                }
-//                break;
-//            }
-//            case R.id.texture: {
-//                handleFocus(event);
-//                break;
-//            }
-//        }
-//        return true;
-//    }
 
     private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
         if (mFlashSupported) {
             requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON);
-            requestBuilder.set(CaptureRequest.FLASH_MODE,
-                    CaptureRequest.FLASH_MODE_OFF);
+                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
         }
     }
 
@@ -1225,7 +1051,7 @@ public class Camera2BasicFragment extends Fragment
         public Dialog onCreateDialog(Bundle savedInstanceState) {
             final Fragment parent = getParentFragment();
             return new AlertDialog.Builder(getActivity())
-                    .setMessage("Request permission message")
+                    .setMessage("Permissions request necessary")
                     .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
