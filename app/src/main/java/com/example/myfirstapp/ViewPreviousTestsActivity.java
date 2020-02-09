@@ -1,7 +1,6 @@
 package com.example.myfirstapp;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.FileProvider;
 
 import android.app.AlertDialog;
@@ -13,7 +12,6 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.StrictMode;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -23,10 +21,9 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Random;
 
-import static com.example.myfirstapp.SabetiCameraActivity.RESULTS_DIRECTORY;
+import static com.example.myfirstapp.MainActivity.RESULTS_DIRECTORY;
 
 public class ViewPreviousTestsActivity extends AppCompatActivity {
 

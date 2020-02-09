@@ -24,7 +24,7 @@ public class ResultsPageActivity extends AppCompatActivity {
 
         // Get the Intent that started this activity and extract the string
         Intent intent = getIntent();
-        String message = intent.getStringExtra(SabetiCameraActivity.IMAGE_FILE_NAME);
+        String message = intent.getStringExtra(MainActivity.IMAGE_FILE_NAME);
 
         // Capture the layout's TextView and set the string as its text
         TextView textView = findViewById(R.id.textView2);
@@ -35,8 +35,8 @@ public class ResultsPageActivity extends AppCompatActivity {
 
         try {
             // disable online uploading functionality temporarily while front-end work is goign on.
-//            String response = uploadFile(message);
-            String response = "OK";
+            String response = uploadFile(message);
+//            String response = "OK";
             textView.setText(message + " succesfully uploaded\n\n" + response);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 textView.setText(Html.fromHtml("<h2>Results</h2><br><p>Strip 1: Positive</p><p>Strip 2: Positive</p><p>Strip 3: Control</p>", Html.FROM_HTML_MODE_COMPACT));
@@ -83,6 +83,11 @@ public class ResultsPageActivity extends AppCompatActivity {
         conn.setRequestProperty("ENCTYPE", "multipart/form-data");
         conn.setRequestProperty("Content-Type", "multipart/form-data;boundary=" + boundary);
         conn.setRequestProperty("upload", fileName);
+//        conn.setRequestProperty("tlx-pixel", tlxpixel); // top-left pixel coordinate
+//        conn.setRequestProperty("tly-pixel", tlypixel);
+//        conn.setRequestProperty("brx-pixel", brxpixel);
+//        conn.setRequestProperty("bry-pixel", brypixel); // bottom right pixel coordinate
+
 
         dos = new DataOutputStream(conn.getOutputStream());
 

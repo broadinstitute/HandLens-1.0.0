@@ -39,5 +39,7 @@ dependencies {
     compile('org.apache.httpcomponents:httpmime:4.3') {
         exclude module: "httpclient"
     }
+    implementation 'com.android.support:appcompat-v7:+'
+
 
 }

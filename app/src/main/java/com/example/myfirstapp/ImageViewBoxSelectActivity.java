@@ -1,6 +1,5 @@
 package com.example.myfirstapp;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.constraintlayout.widget.Constraints;
@@ -29,7 +28,6 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import java.io.File;
 import java.net.URI;
@@ -128,7 +126,6 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
                     mActivePointerId = INVALID_POINTER_ID;
                     break;
                 }
-
             }
             return true;
         }

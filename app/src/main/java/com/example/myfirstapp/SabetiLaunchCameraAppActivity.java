@@ -14,7 +14,6 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
-import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -144,12 +143,12 @@ public class SabetiLaunchCameraAppActivity extends AppCompatActivity {
     private File createImageFile(String sampleName) throws IOException {
         // Create an image file name
         String timeStamp =
-                new SimpleDateFormat(SabetiCameraActivity.CAMERA_DATE_FORMAT,
+                new SimpleDateFormat(MainActivity.CAMERA_DATE_FORMAT,
                         Locale.getDefault()).format(new Date());
         File storageDir =
                 getExternalFilesDir(null);
         String imageFileName = "IMG_" + sampleName;
-        File outputDirectory = new File(storageDir, SabetiCameraActivity.RESULTS_DIRECTORY + "/IMG_" + timeStamp);
+        File outputDirectory = new File(storageDir, MainActivity.RESULTS_DIRECTORY + "/IMG_" + timeStamp);
 //                String fileName = storageDir + "/results/" + imageFileName + ".jpg";
         if (!outputDirectory.exists()) {
             if (!outputDirectory.mkdirs()) {

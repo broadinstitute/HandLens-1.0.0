@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.StrictMode;
 import android.util.Log;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.EditText;
 
@@ -21,6 +22,10 @@ public class MainActivity extends AppCompatActivity {
             "android.permission.INTERNET",
             "android.permission.ACCESS_NETWORK_STATE",
             "android.permission.ACCESS_WIFI_STATE"};
+
+    public static final String IMAGE_FILE_NAME = "IMAGE_FILE_NAME";
+    public static final String CAMERA_DATE_FORMAT = "yyyyMMdd_HHmmss";
+    public static final String RESULTS_DIRECTORY = "/results";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,8 +55,8 @@ public class MainActivity extends AppCompatActivity {
      * Called when the user taps the Take Picture button
      */
     public void activateCamera(View view) {
-//        Intent intent = new Intent(this, SabetiCameraActivity.class);
-        Intent intent = new Intent(this, SabetiLaunchCameraAppActivity.class);
+        Intent intent = new Intent(this, CameraActivity.class);
+//        Intent intent = new Intent(this, SabetiLaunchCameraAppActivity.class);
         EditText editText = (EditText) findViewById(R.id.numb_);
         String message = editText.getText().toString();
         intent.putExtra(EXTRA_MESSAGE, message);
