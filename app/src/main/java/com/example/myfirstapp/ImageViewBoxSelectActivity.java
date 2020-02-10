@@ -172,7 +172,7 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
             canvas.translate(mPosX, mPosY);
 
             //center
-            float strip_ratio = 1372.0f / 82.0f;
+            float strip_ratio = 1340.0f / 82.0f;
             int x0 = getWidth();
             int y0 = getHeight();
 

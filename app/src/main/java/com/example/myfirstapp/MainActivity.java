@@ -55,8 +55,8 @@ public class MainActivity extends AppCompatActivity {
      * Called when the user taps the Take Picture button
      */
     public void activateCamera(View view) {
-        Intent intent = new Intent(this, CameraActivity.class);
-//        Intent intent = new Intent(this, SabetiLaunchCameraAppActivity.class);
+//        Intent intent = new Intent(this, CameraActivity.class);
+        Intent intent = new Intent(this, SabetiLaunchCameraAppActivity.class);
         EditText editText = (EditText) findViewById(R.id.numb_);
         String message = editText.getText().toString();
         intent.putExtra(EXTRA_MESSAGE, message);

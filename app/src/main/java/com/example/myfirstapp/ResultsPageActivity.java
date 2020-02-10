@@ -9,11 +9,16 @@ import android.text.Html;
 import android.util.Log;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class ResultsPageActivity extends AppCompatActivity {
 
@@ -30,19 +35,32 @@ public class ResultsPageActivity extends AppCompatActivity {
         TextView textView = findViewById(R.id.textView2);
         textView.setText(message);
 
-        String charset = "UTF-8";
-        String requestURL = "http://34.95.33.102:3001/upload";
-
         try {
             // disable online uploading functionality temporarily while front-end work is goign on.
-//            String response = uploadFile(message);
-            String response = "OK - " + message;
-            textView.setText(message + " succesfully uploaded\n\n" + response);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                textView.setText(Html.fromHtml("<h2>Results</h2><br><p>Strip 1: Positive</p><p>Strip 2: Positive</p><p>Strip 3: Control</p>", Html.FROM_HTML_MODE_COMPACT));
+            String response = uploadFile(message);
+//            String response = "OK - " + message;
+            if (response.charAt(0) != '[') {
+                textView.setText(response);
             } else {
-                textView.setText(Html.fromHtml("<p>Strip 1: Positive</p><p>Strip2: Positive here</p><p>Strip3: Control</p>"));
+                response = response.substring(1, response.length()-1);
+                ArrayList<String> results = new ArrayList<>(Arrays.asList(
+                        response.split(",")));
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    String htmlText = "<h2>Results</h2><br>";
+                    for (int i = 0; i < results.size(); i++ ){
+                        htmlText += "<p> Strip " + i + ": " + results.get(i) + "</p>";
+                    }
+                    textView.setText(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_COMPACT));
+                } else {
+                    String htmlText = "<p>Results</p><p></p>";
+                    for (int i = 0; i < results.size(); i++ ){
+                        htmlText += "<p> Strip " + i + ": " + results.get(i) + "</p>";
+                    }
+                    textView.setText(Html.fromHtml(htmlText));
+                }
             }
+
+
         } catch (Exception e) {
             //textView.setText(message + " upload failed");
             textView.setText(e.getMessage());
@@ -71,7 +89,8 @@ public class ResultsPageActivity extends AppCompatActivity {
 
         // open a URL connection to the Servlet
         FileInputStream fileInputStream = new FileInputStream(sourceFile);
-        URL url = new URL("http://35.232.84.84:3000/upload");
+        String requestAddress = "http://34.95.33.102:3001/upload";
+        URL url = new URL(requestAddress);
 
         // Open a HTTP  connection to  the URL
         conn = (HttpURLConnection) url.openConnection();
@@ -117,10 +136,25 @@ public class ResultsPageActivity extends AppCompatActivity {
         // send multipart form data necesssary after file data...
         dos.writeBytes(lineEnd);
         dos.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
-
+        int responseCode = conn.getResponseCode();
+        InputStream inputStream;
         // Responses from the server (code and message)
-        String serverResponseMessage = conn.getResponseMessage();
+        if (200 <= responseCode && responseCode <= 299) {
+            inputStream = conn.getInputStream();
+        } else {
+            inputStream = conn.getErrorStream();
+        }
 
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(
+                        inputStream));
+        StringBuilder response = new StringBuilder();
+        String currentLine;
+        while ((currentLine = in.readLine()) != null)
+            response.append(currentLine);
+        in.close();
+
+        String serverResponseMessage = response.toString();
         Log.v("uploadFile", "HTTP Response is : "
                 + serverResponseMessage);
 
@@ -132,7 +166,7 @@ public class ResultsPageActivity extends AppCompatActivity {
         return serverResponseMessage;
     }
 
-    public Boolean saveResultsFile(String imagePath, String serverResponse){
+    public Boolean saveResultsFile(String imagePath, String serverResponse) {
         File image_file = new File(imagePath);
         String image_name = image_file.getName();
         String sample_name = image_name.substring(0, image_name.length() - 4);
