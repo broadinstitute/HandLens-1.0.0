@@ -1,15 +1,10 @@
 package com.example.myfirstapp;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.constraintlayout.widget.Constraints;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -18,7 +13,6 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.util.Log;
 import android.util.Size;
 import android.view.MotionEvent;
@@ -28,11 +22,12 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 
 import java.io.File;
-import java.net.URI;
 
 import static com.example.myfirstapp.MainActivity.EXTRA_MESSAGE;
+import static com.example.myfirstapp.MainActivity.IMAGE_FILE_NAME;
 import static com.example.myfirstapp.SabetiLaunchCameraAppActivity.getCameraPhotoOrientation;
 
 public class ImageViewBoxSelectActivity extends AppCompatActivity {
@@ -44,11 +39,11 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
             "android.permission.INTERNET",
             "android.permission.ACCESS_NETWORK_STATE",
             "android.permission.ACCESS_WIFI_STATE"};
-    public static final String IMAGE_FILE_NAME = "IMAGE_FILE_NAME";
     ImageView imageView;
     LinearLayout mlinearLayout;
     public static final String CAMERA_DATE_FORMAT = "yyyyMMdd_HHmmss";
     public static final String RESULTS_DIRECTORY = "/results";
+    private static final String TAG = "ImageViewBoxSelectAct";
     private long mLastAnalysisResultTime;
     private double exposure_required = 1;
 
@@ -65,13 +60,33 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
         private float mPrevY;
         private float mPosX = 0f;
         private float mPosY = 0f;
-
+        private Context mContext;
+        private RelativeLayout mOuterContainerLayout;
+        private RelativeLayout.LayoutParams mOuterButtonParams;
+        private RelativeLayout.LayoutParams mInnerContainerLayoutParams;
         private ImageButton mImageButton;
 
-        Box(Context context, ImageButton imageButton, LinearLayout linearLayout) {
+        Box(Context context, ImageButton imageButton) {
             super(context);
+            mContext = context;
             mImageButton = imageButton;
-            mlinearLayout =  linearLayout;
+            // mlinearLayout =  linearLayout;
+            mOuterContainerLayout = new RelativeLayout(mContext);
+            mOuterContainerLayout.setLayoutParams(new RelativeLayout.LayoutParams(
+                    RelativeLayout.LayoutParams.MATCH_PARENT,
+                    RelativeLayout.LayoutParams.MATCH_PARENT));
+
+            mOuterButtonParams = new RelativeLayout.LayoutParams(
+                    RelativeLayout.LayoutParams.WRAP_CONTENT,
+                    RelativeLayout.LayoutParams.WRAP_CONTENT);
+            mOuterButtonParams.addRule(RelativeLayout.CENTER_IN_PARENT,
+                    RelativeLayout.TRUE);
+
+            mInnerContainerLayoutParams = new RelativeLayout.LayoutParams(
+                    RelativeLayout.LayoutParams.MATCH_PARENT,
+                    RelativeLayout.LayoutParams.MATCH_PARENT);
+            mInnerContainerLayoutParams.addRule(RelativeLayout.CENTER_IN_PARENT,
+                    RelativeLayout.TRUE);
 
             mScaleGestureDetector = new ScaleGestureDetector(context, new ScaleListener());
 //            mGestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener());
@@ -178,8 +193,16 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
             canvas.drawText("Ctrl", x0 - strip_width * 2, (y0 - strip_height) / 2 - (y0 - strip_height) / 20, paint);
 
             ((ViewGroup) mImageButton.getParent()).removeView(mImageButton);
-            mlinearLayout.addView(mImageButton);
+//            ((ViewGroup)this.getParent()).addView(mImageButton);
+            mOuterButtonParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+            mImageButton.setLayoutParams(mOuterButtonParams);
+            mOuterContainerLayout.addView(mImageButton);
+            if (((ViewGroup) mOuterContainerLayout.getParent()) != null) {
+                ((ViewGroup) mOuterContainerLayout.getParent()).removeView(mOuterContainerLayout);
+            }
+            addContentView(mOuterContainerLayout, mInnerContainerLayoutParams);
             canvas.restore();
+
         }
     }
 
@@ -192,13 +215,13 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
         String photoFilePath = getIntent().getStringExtra(EXTRA_MESSAGE);
         Log.d("ImageViewBoxSelectAct", "photoFilePath: " + photoFilePath);
         File imageFile = new File(photoFilePath);
-        if (!imageFile.exists()){
+        if (!imageFile.exists()) {
             Log.d("ImageViewBoxSelectAct", "DOES NOT EXIST: " + photoFilePath);
 
         }
 //        BitmapFactory.Options options = new BitmapFactory.Options();
 //        options.inSampleSize = 16;
-        Bitmap sourceImage = BitmapFactory.decodeFile(imageFile.getAbsolutePath() );
+        Bitmap sourceImage = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
 //        imageView.setImageBitmap(sourceImage);
         Matrix rotationMatrix = new Matrix();
         imageView.setImageURI(Uri.fromFile(imageFile));
@@ -225,20 +248,29 @@ public class ImageViewBoxSelectActivity extends AppCompatActivity {
     }
 
 
-    private void addBox(String sampleName) {
+    private void addBox(String photoFilePath) {
         // Set up preview screen based
         final int screenWidth = imageView.getWidth();
         final int screenHeight = imageView.getHeight();
         Size screen = new Size(screenWidth, screenHeight);
 
-        ImageButton imageCaptureView = findViewById(R.id.sendToServerButton);
-
         Intent resultsPageIntent = new Intent(this, ResultsPageActivity.class);
-        Box box = new Box(this, imageCaptureView,
-                (LinearLayout)findViewById(R.id.sendToServerButtonLinearLayout));
+        resultsPageIntent.putExtra(IMAGE_FILE_NAME, photoFilePath);
+
+        ImageButton sendToResultsButton = findViewById(R.id.sendToServerButton);
+
+        Box box = new Box(this, sendToResultsButton);
         ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         addContentView(box, params);
+
+        sendToResultsButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "button pressed");
+                startActivity(resultsPageIntent);
+            }
+        });
 
     }
 
