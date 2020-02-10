@@ -308,7 +308,8 @@ public class Camera2BasicFragment extends Fragment
                     if (afState == null) {
                         captureStillPicture();
                     } else if (CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED == afState ||
-                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState) {
+                            CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED == afState ||
+                            CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN == afState) {
                         // CONTROL_AE_STATE can be null on some devices
                         Integer aeState = result.get(CaptureResult.CONTROL_AE_STATE);
                         if (aeState == null ||
@@ -438,7 +439,27 @@ public class Camera2BasicFragment extends Fragment
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         view.findViewById(R.id.picture).setOnTouchListener(this);
+        view.findViewById(R.id.picture).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "picture button onClickListener");
+                takePicture();
+            }
+        });
         view.findViewById(R.id.info).setOnTouchListener(this);
+        view.findViewById(R.id.info).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Log.d(TAG, "info button onClickListener");
+                Activity activity = getActivity();
+                if (null != activity) {
+                    new AlertDialog.Builder(activity)
+                            .setMessage("Instructions\n")
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                }
+            }
+        });
         view.findViewById(R.id.texture).setOnTouchListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
@@ -929,19 +950,13 @@ public class Camera2BasicFragment extends Fragment
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
         switch (view.getId()) {
-            case R.id.picture: {
-                takePicture();
-                break;
+            case R.id.picture:{
+                Log.d(TAG, "picture button onTouchListener");
+                return false;
             }
             case R.id.info: {
-                Activity activity = getActivity();
-                if (null != activity) {
-                    new AlertDialog.Builder(activity)
-                            .setMessage("Instructions\n")
-                            .setPositiveButton(android.R.string.ok, null)
-                            .show();
-                }
-                break;
+                Log.d(TAG, "info button onTouchListener");
+                return false;
             }
             case R.id.texture: {
                 // https://www.morethantechnical.com/tag/camera2/
