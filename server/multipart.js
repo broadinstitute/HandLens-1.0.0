@@ -44,6 +44,11 @@ app.post(
           res.write(data);
 	  res.end()    //res.end('end data - replace with actual data');
       });
+      pyProg.stderr.on('data', function(data) {
+	                console.log(data.toString());
+	                res.write(data);
+	                res.end()    //res.end('end data - replace with actual data');
+	            });
   });
 
 app.get('/uploads/:upload', function (req, res){
@@ -55,7 +60,8 @@ app.get('/uploads/:upload', function (req, res){
 
 });
 
+var port_numb = 3001
 
-app.listen(3000, function () {
-	   console.log('Example app listening on port 3000!');
+app.listen(port_numb, function () {
+	   console.log('Example app listening on port ' + port_numb);
 });

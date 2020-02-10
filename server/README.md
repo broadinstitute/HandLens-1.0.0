@@ -12,6 +12,19 @@ sudo apt install nodejs
 sudo apt install npm
 ```
 
+Next, install the relevant python libraies:
+```
+sudo apt install pip3-python
+sudo apt install libopencv-dev
+pip3 install opencv-python
+pip3 install np_utils
+pip3 install imutils
+pip3 install matplotlib
+pip3 install pandas
+pip3 install scipy
+
+```
+
 Next, install and run the server with the following commands:
 ```
 cd ${PATH_TO_REPOSITORY}/server

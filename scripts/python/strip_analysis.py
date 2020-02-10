@@ -7,9 +7,9 @@ import glob
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.signal import chirp, find_peaks, peak_widths, peak_prominences
-from keras.models import Sequential
-from keras.layers import Dense, Activation
-from sklearn.model_selection import StratifiedKFold
+# from keras.models import Sequential
+# from keras.layers import Dense, Activation
+# from sklearn.model_selection import StratifiedKFold
 
 
 class MaxDetector:
