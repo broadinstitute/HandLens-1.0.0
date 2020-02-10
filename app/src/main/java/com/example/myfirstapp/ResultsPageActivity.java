@@ -31,12 +31,12 @@ public class ResultsPageActivity extends AppCompatActivity {
         textView.setText(message);
 
         String charset = "UTF-8";
-        String requestURL = "http://35.232.84.84:3000/upload";
+        String requestURL = "http://34.95.33.102:3001/upload";
 
         try {
             // disable online uploading functionality temporarily while front-end work is goign on.
-            String response = uploadFile(message);
-//            String response = "OK";
+//            String response = uploadFile(message);
+            String response = "OK - " + message;
             textView.setText(message + " succesfully uploaded\n\n" + response);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 textView.setText(Html.fromHtml("<h2>Results</h2><br><p>Strip 1: Positive</p><p>Strip 2: Positive</p><p>Strip 3: Control</p>", Html.FROM_HTML_MODE_COMPACT));
