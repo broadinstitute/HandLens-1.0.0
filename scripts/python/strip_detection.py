@@ -26,6 +26,7 @@ parser.add_argument('--truth_file', help='File which give the truth value of the
                                          'the image file', required=False, default=None)
 parser.add_argument('--output_dir', help='directory for output files')
 parser.add_argument('--prediction_mode', help='Enable predictions', action='store_true')
+parser.add_argument('--strip_pixels', type=float)
 
 args = parser.parse_args()
 image_file = args.image_file
@@ -291,8 +292,8 @@ mask = cv2.dilate(mask, kernel, iterations=1)
 # # fix image brighness by normalizing to red channel
 red_hsv_v = cv2.mean(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), red_mask)[2]
 exp_red_hsv_v = 65
-if red_hsv_v < exp_red_hsv_v / 3.0:
-    raise Exception('Image is too dim')
+# if red_hsv_v < exp_red_hsv_v / 3.0:
+#    raise Exception('Image is too dim')
 
 # When we're testing, sometimes we've made test images artifically have
 # black background. In these situations, our brightness normalization
