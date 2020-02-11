@@ -298,25 +298,25 @@ if red_hsv_v < exp_red_hsv_v / 3.0:
 # black background. In these situations, our brightness normalization
 # has to be summed instead of multiplied, because the inclusion of a
 # pure black composite background underestimates image brightness
-test_mode_includes_composite_black_background = True
-if red_hsv_v < exp_red_hsv_v:
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    plt.show()
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-    h, s, v = cv2.split(hsv)
-    if test_mode_includes_composite_black_background:
-        add_val = exp_red_hsv_v - red_hsv_v
-        lim = 255 - add_val
-        v[v > lim] = 255
-        v[v <= lim] += int(add_val)
-    else:
-        mult_val = exp_red_hsv_v / red_hsv_v
-        cv2.convertScaleAbs(v, v, mult_val, 0)
-
-    image = cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
-    cv2.convertScaleAbs(image, image, exp_red_hsv_v / red_hsv_v, 0);
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+# test_mode_includes_composite_black_background = True
+# if red_hsv_v < exp_red_hsv_v:
+#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+#     plt.show()
+#     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#
+#     h, s, v = cv2.split(hsv)
+#     if test_mode_includes_composite_black_background:
+#         add_val = exp_red_hsv_v - red_hsv_v
+#         lim = 255 - add_val
+#         v[v > lim] = 255
+#         v[v <= lim] += int(add_val)
+#     else:
+#         mult_val = exp_red_hsv_v / red_hsv_v
+#         cv2.convertScaleAbs(v, v, mult_val, 0)
+#
+#     image = cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
+#     cv2.convertScaleAbs(image, image, exp_red_hsv_v / red_hsv_v, 0);
+#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
 # Processing Step 2a: determining the bounding boxes for the red arrows.
 # Because the red hue seems to be well-conserved between images,
@@ -819,15 +819,40 @@ for img in raw_strip_images:
     # vimg = cv2.flip(nimg, 0)
     if not prediction_mode:
         cv2.imwrite(output_prefix + '_raw_strip{}{}.png'.format(idx, truth_values[idx]), nimg)
-    # plots[idx].imshow(cv2.cvtColor(vimg, cv2.COLOR_BGR2RGB))
+    # plots[idx].imshow(cv2.cvtColor(raw_strip_images[idx], cv2.COLOR_BGR2RGB))
     idx += 1
 
+
+def getmin(data):
+    half = int(data.shape[0]/2)
+    top = data.shape[0]
+    values = np.array([])
+    for i in range(half, top):
+        values = np.append(values, np.mean(data[i]))
+    m = np.min(values)
+    sd = np.std(values)
+    return m, sd
+
+
+def predict(data, threshold):
+    m, sd = getmin(data)
+    if m < threshold: return "POSITIVE"
+#     if m < LODThreshold: return "POSITIVE"
+#     elif m < LODThreshold + 2 * sd: return "BORDERLINE"
+    else:
+        return "NEGATIVE"
+
+
 if prediction_mode:
+
+    min0, _ = getmin(convert_image_to_linear_signal(correct_input_image(norm_strip_images[-1],
+                                                                        'clahe')))
     truths = []
-    for nimg in norm_strip_images:
-        max_detector = MaxDetector()
-        truths.append(max_detector.predict_signal_truth(
-            convert_image_to_linear_signal(correct_input_image(nimg, 'clahe'))))
+    for i in range(0, len(norm_strip_images)-1):
+        nimg = norm_strip_images[i]
+        truths.append(predict(convert_image_to_linear_signal(correct_input_image(nimg, 'clahe')),
+                              min0))
+    truths.append('CONTROL')
     if len(truths) == 2:
         print(truths)
     else:

@@ -267,6 +267,7 @@ def correct_input_image(nimg, correction_method):
         cimg = gray_correction(hsv)
     else:
         raise Exception('incorrect normalization type')
+
     return cimg
 
 
