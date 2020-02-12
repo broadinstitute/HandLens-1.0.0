@@ -17,7 +17,7 @@ else:
     from .strip_analysis import correct_input_image
     from .strip_analysis import convert_image_to_linear_signal
 
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser('Read Sherlock Strips')
@@ -44,8 +44,9 @@ image = cv2.GaussianBlur(image, (5, 5), 0)
 
 # Parameters
 
-w = image.shape[0]
-h = image.shape[1]
+stripPixelArea = 239795
+stripWidthRelative = 7
+stripHeightRelative = 48
 
 # The maximum and minimum allowed ratios of the sides of the green box
 maxGreenBoxRatio = 160.0 / 528
@@ -65,9 +66,6 @@ minRedGreenIntersection = 1000.0 / 4500
 
 # White box strip ratio
 whiteBoxStripRatio = 160 / 1700.0
-
-# The Y value above which the top of the strip should be
-maxTopY = int(w * 0.2)
 
 # Minimum intensity for binary thresholding of the top portion of the strips
 minStripThreshold = 190
@@ -287,37 +285,22 @@ red_mask = cv2.erode(red_mask, kernel, iterations=1)
 red_mask = cv2.dilate(red_mask, kernel, iterations=1)
 mask = cv2.erode(mask, kernel, iterations=1)
 mask = cv2.dilate(mask, kernel, iterations=1)
-                        
+           # adjust brightness
 
-# # fix image brighness by normalizing to red channel
-red_hsv_v = cv2.mean(cv2.cvtColor(image, cv2.COLOR_BGR2RGB), red_mask)[2]
-exp_red_hsv_v = 65
-# if red_hsv_v < exp_red_hsv_v / 3.0:
-#    raise Exception('Image is too dim')
+k_factor = math.sqrt(stripPixelArea/(stripWidthRelative * stripHeightRelative))
+approxStripBoxWidthPixels = stripWidthRelative * k_factor
+approxStripBoxHeightPixels = stripHeightRelative * k_factor
 
-# When we're testing, sometimes we've made test images artifically have
-# black background. In these situations, our brightness normalization
-# has to be summed instead of multiplied, because the inclusion of a
-# pure black composite background underestimates image brightness
-# test_mode_includes_composite_black_background = True
-# if red_hsv_v < exp_red_hsv_v:
-#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-#     plt.show()
-#     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-#
-#     h, s, v = cv2.split(hsv)
-#     if test_mode_includes_composite_black_background:
-#         add_val = exp_red_hsv_v - red_hsv_v
-#         lim = 255 - add_val
-#         v[v > lim] = 255
-#         v[v <= lim] += int(add_val)
-#     else:
-#         mult_val = exp_red_hsv_v / red_hsv_v
-#         cv2.convertScaleAbs(v, v, mult_val, 0)
-#
-#     image = cv2.cvtColor(cv2.merge((h, s, v)), cv2.COLOR_HSV2BGR)
-#     cv2.convertScaleAbs(image, image, exp_red_hsv_v / red_hsv_v, 0);
-#     plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+resized_img = cv2.resize(image, (0,0) , fx=(1/k_factor), fy=(1/k_factor))
+grey_resized = cv2.cvtColor(resized_img, cv2.COLOR_BGR2GRAY)
+
+kernel = np.ones((stripHeightRelative,stripWidthRelative),np.float32)/(stripWidthRelative * stripHeightRelative)
+dst = cv2.filter2D(grey_resized,-1,kernel)
+plt.imshow(cv2.cvtColor(dst, cv2.COLOR_GRAY2RGB))
+_, maxVal, _, _ = cv2.minMaxLoc(dst)
+
+minStripThreshold = 0.7*maxVal
+# print(minStripThreshold)
 
 # Processing Step 2a: determining the bounding boxes for the red arrows.
 # Because the red hue seems to be well-conserved between images,
@@ -333,7 +316,8 @@ red_boxes = []
 red_rectangles = []
 for c in cnts:
     M = cv2.moments(c)
-    if M["m00"] == 0: continue
+    if M["m00"] == 0:
+        continue
 
     rect = cv2.minAreaRect(c)
     box = makeOrderedBox(rect)
@@ -351,7 +335,7 @@ for c in cnts:
     tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 10)
     tmp = cv2.circle(tmp, (box[0][0], box[0][1]), 15, (255, 0, 0), -1)
 
-# plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
 
 
 # In[182]:
@@ -459,7 +443,7 @@ for box in center_boxes:
     tmp = cv2.circle(tmp, (box[0][0], box[0][1]), 20, (255, 0, 0), -1)
 
 # plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
-
+# plt.show()
 
 # In[184]:
 
@@ -562,7 +546,7 @@ for box in top_boxes:
 
 
 # plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
-
+# plt.show()
 
 # In[187]:
 
@@ -703,7 +687,7 @@ for i in range(0, num_boxes):
 
 
 # plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
-
+# plt.show()
 
 # In[189]:
 
@@ -801,7 +785,7 @@ if truth_values is None:
 else:
     truth_values = ['_{}'.format(val) for val in truth_values]
 
-# fig, plots = plt.subplots(1, len(raw_strip_images))
+fig, plots = plt.subplots(1, len(raw_strip_images))
 norm_strip_images = []
 idx = 0
 for img in raw_strip_images:
@@ -817,11 +801,13 @@ for img in raw_strip_images:
     nimg = nimg[30:, :]
     norm_strip_images += [nimg]
 
-    # vimg = cv2.flip(nimg, 0)
+    vimg = cv2.flip(nimg, 0)
     if not prediction_mode:
         cv2.imwrite(output_prefix + '_raw_strip{}{}.png'.format(idx, truth_values[idx]), nimg)
-    # plots[idx].imshow(cv2.cvtColor(raw_strip_images[idx], cv2.COLOR_BGR2RGB))
+    plots[idx].imshow(cv2.cvtColor(vimg, cv2.COLOR_BGR2RGB))
     idx += 1
+
+# fig.show()
 
 
 def getmin(data):
@@ -832,6 +818,7 @@ def getmin(data):
         values = np.append(values, np.mean(data[i]))
     m = np.min(values)
     sd = np.std(values)
+    # print(m)
     return m, sd
 
 
@@ -845,18 +832,29 @@ def predict(data, threshold):
 
 
 if prediction_mode:
+    idx = len(norm_strip_images) - 1
+    min0 = 0
+    img0 = correct_input_image(norm_strip_images[len(norm_strip_images) - 1], 'clahe')
+    data0 = img0.astype('int32')
+    min0, _ = getmin(data0)
 
-    min0, _ = getmin(convert_image_to_linear_signal(correct_input_image(norm_strip_images[-1],
-                                                                        'clahe')))
     truths = []
+    # fig, plots = plt.subplots(1, len(raw_strip_images))
+    # plots[len(raw_strip_images)-1].imshow(cv2.flip(
+    #     cv2.cvtColor(correct_input_image(norm_strip_images[len(norm_strip_images) - 1], 'clahe'),
+    #     cv2.COLOR_BGR2RGB), 0))
+
     for i in range(0, len(norm_strip_images)-1):
-        nimg = norm_strip_images[i]
-        truths.append(predict(convert_image_to_linear_signal(correct_input_image(nimg, 'clahe')),
-                              min0))
+        nimg = correct_input_image(norm_strip_images[i], 'clahe')
+        truths.append(predict(nimg.astype('int32'), min0))
+        # plots[i].imshow(cv2.flip(cv2.cvtColor(nimg, cv2.COLOR_BGR2RGB), 0))
+
     truths.append('CONTROL')
     if len(truths) == 2:
         print(truths)
     else:
         print(truths)
-    sys.stdout.flush()
+
+    # fig.show()
+
 
