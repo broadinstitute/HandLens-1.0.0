@@ -1,0 +1,6 @@
+pos
+pos
+pos
+neg
+neg
+neg
