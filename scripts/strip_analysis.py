@@ -369,11 +369,6 @@ def main():
     max_detector.print_summary()
     peak_detector.print_summary()
 
-    # nn = NeuralNetDetector(len(signals[0]))
-    # nn.analyze_cross_validated_performance(np.array(signals), np.array(labels))
-
-    # Using the means and the standard deviations calculated above, we can use a prediction
-    # algorithm to see how our data does.
 
 
 if __name__ == '__main__':
