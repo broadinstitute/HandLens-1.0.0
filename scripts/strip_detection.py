@@ -17,7 +17,7 @@ else:
     from .strip_analysis import MaxDetector
     from .strip_analysis import correct_input_image
     from .strip_analysis import convert_image_to_linear_signal
-
+matplotlib.use("TkAgg")
 # matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
@@ -323,14 +323,13 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     mask = redgreen_mask1 + redgreen_mask2
 
     kernel = np.ones((15, 15), np.uint8)
-    red_mask = cv2.erode(red_mask, kernel, iterations=1)
-    red_mask = cv2.dilate(red_mask, kernel, iterations=1)
     mask = cv2.erode(mask, kernel, iterations=1)
     mask = cv2.dilate(mask, kernel, iterations=1)
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(mask, cv2.COLOR_GRAY2RGB))
+        plt.show()
 
     '''adjust brightness'''
     # resize the image, and then create a kernel
@@ -344,6 +343,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
 
     if plotting:
         plt.imshow(cv2.cvtColor(dst, cv2.COLOR_GRAY2RGB))
+        plt.show()
     _, maxVal, _, _ = cv2.minMaxLoc(dst)
 
     minStripThreshold = 0.4 * maxVal
@@ -409,6 +409,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(thresh, cv2.COLOR_BGR2RGB))
+        plt.show()
 
     '''
     # Processing Step 4: detect boundary boxes for the top of the strips
@@ -448,6 +449,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.show()
 
     '''
     In some cases, the control or pos signal is so strong that a continuous box gets split up into
@@ -495,6 +497,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.show()
 
     '''
     # Processing Step 5: construct the boxes that enclose the sensitive strip area
@@ -548,6 +551,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.show()
 
     '''
     # Processing Step 6: Extract the strips into separate images
@@ -560,6 +564,8 @@ def getPredictions(filename, stripPixelArea, plotting=False):
 
     if plotting:
         fig, plots = plt.subplots(1, len(strip_boxes) * 3, figsize=(10, 10))
+        plt.show()
+
     idx = 0
     tmp = image.copy()
     raw_strip_images = []
@@ -631,6 +637,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
 
     if plotting:
         fig, plots = plt.subplots(1, len(raw_strip_images), figsize=(10, 10))
+        plt.show()
     idx = 0
     tick_labels = [""]
     tick_labels.extend([str(i * 100) for i in range(stripHoldY // 100, 0, -1)])
@@ -682,10 +689,10 @@ def main():
     parser = argparse.ArgumentParser('Read Sherlock Strips')
     parser.add_argument('--image_file', required=True)
     parser.add_argument('--strip_pixels', type=float)
+    parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
 
-    scores = getPredictions(args.image_file, args.strip_pixels)
-
+    scores = getPredictions(args.image_file, args.strip_pixels, args.plotting)
     class_threshold = 0.7
     truths = ['POSITIVE' if s < class_threshold else 'NEGATIVE' for s in scores]
     truths.append('CONTROL')
