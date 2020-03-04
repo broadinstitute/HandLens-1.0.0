@@ -37,7 +37,7 @@ app.post(
     storage: storage
   }).single('upload'), function(req, res) {
       const { spawn } = require('child_process');
-      const pyProg = spawn('python3', ['../scripts/python/strip_detection.py', '--image_file', 'uploads/' + req.file.filename, '--prediction_mode', '--strip_pixels', req.headers.mscalefactor]);
+      const pyProg = spawn('python3', ['../scripts/strip_detection.py', '--image_file', 'uploads/' + req.file.filename, '--strip_pixels', req.headers.mscalefactor]);
       
       console.log(req.headers.mscalefactor);
       pyProg.stdout.on('data', function(data) {
