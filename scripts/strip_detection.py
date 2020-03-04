@@ -259,7 +259,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     maxGreenBoxRatio = 140.0 / 528
     minGreenBoxRatio = 102.0 / 578
     maxGreenBoxArea = stripPixelArea * 90 / 300
-    minGreenBoxArea = stripPixelArea * 50 / 300
+    minGreenBoxArea = stripPixelArea * 35 / 300
 
     # The maximum allowed ratio of the sides of the final deteted strip
     maxStripBoxRatio = stripWidthRelative / stripHeightRelative
@@ -320,7 +320,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     green_mask = cv2.inRange(hsv, lower_green, upper_green)
     redgreen_mask1 = cv2.inRange(hsv, lower_redgreen1, upper_redgreen1)
     redgreen_mask2 = cv2.inRange(hsv, lower_redgreen2, upper_redgreen2)
-    mask = redgreen_mask1 + redgreen_mask2
+    mask = green_mask # redgreen_mask1 + redgreen_mask2
 
     kernel = np.ones((15, 15), np.uint8)
     mask = cv2.erode(mask, kernel, iterations=1)
@@ -364,8 +364,11 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     # Create a copy of the original image to draw the bounding boxes on
     tmp = image.copy()
 
-    green_boxes = []
-    green_rects = []
+    green_box_candidates = []
+    green_rect_candidates = []
+
+    green_box_candidates = []
+    green_rect_candidates = []
     for c in cnts:
         M = cv2.moments(c)
         if M["m00"] == 0: continue
@@ -380,31 +383,80 @@ def getPredictions(filename, stripPixelArea, plotting=False):
         # arbitrarily, we take the ratio of the sides as the lesser ratio:
         greenBoxRatio = min(rect[1][0] / rect[1][1], rect[1][1] / rect[1][0])
         area = boxArea(box)
-        if greenBoxRatio < minGreenBoxRatio or maxGreenBoxRatio < greenBoxRatio or \
-                area < minGreenBoxArea or area > maxGreenBoxArea: continue
 
-        green_boxes += [box[0:]]
-        green_rects += [rect]
+        green_box_candidates += [box[0:]]
+        green_rect_candidates += [rect]
 
+    green_box_candidates.sort(key=lambda box: boxArea(box), reverse=True)
+    green_rect_candidates.sort(key=lambda rect: rectArea(rect), reverse=True)
+    green_rect_len = max(green_rect_candidates[1][1][0],
+                         green_rect_candidates[1][1][1])
+
+    # In some cases, the red arrows split the green boxes into two.
+    # We fix this by merging two boxes if the bottom left and top left corners of the respective
+    # boxes, and the  right and top right corners of the respective boxes are within a threshold
+    # distance of  each other.
+    green_boxes = []
+    green_rects = []
+    green_box_candidates.sort(key=lambda item: item[1][1])
+
+    distance_threshold = green_rect_len * 0.20
+    merged_boxes = {}
+    tmp = image.copy()
+    for i in range(0, len(green_box_candidates)):
+        upper_box = green_box_candidates[i]
+        if i in merged_boxes:
+            continue
+        current_merged_upper_box = upper_box
+        for j in range(i, len(green_box_candidates)):
+            lower_box = green_box_candidates[j]
+
+            if pointDistance(current_merged_upper_box[3], lower_box[0]) < distance_threshold and \
+                    pointDistance(current_merged_upper_box[2], lower_box[1]) < distance_threshold:
+                # Sometimes the arrows get detected in this step as false boxes -- to filter for
+                # this, we make sure that boxes can only be concatenated if they have similar width:
+                if pointDistance(current_merged_upper_box[3], current_merged_upper_box[2]) < \
+                        pointDistance(lower_box[0], lower_box[1]) * 1.5:
+                    current_merged_upper_box = np.array([current_merged_upper_box[0],
+                                                         current_merged_upper_box[1],
+                                                         lower_box[2], lower_box[3]])
+                    if minGreenBoxArea < boxArea(current_merged_upper_box):
+                        merged_boxes[j] = True
+
+        else:
+            stripBoxRatio = pointDistance(current_merged_upper_box[0],
+                                          current_merged_upper_box[1]) / \
+                            pointDistance(current_merged_upper_box[0],
+                                          current_merged_upper_box[3])
+            if minGreenBoxArea < boxArea(current_merged_upper_box):  # and \
+                #                 stripBoxRatio < maxStripBoxRatio:
+                green_boxes.append(current_merged_upper_box)
+
+    # Create a copy of the original image to draw the bounding boxes on
+    tmp = image.copy()
+    for box in green_boxes:
         tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 10)
         tmp = cv2.circle(tmp, (box[0][0], box[0][1]), 20, (255, 0, 0), -1)
-
-    green_boxes.sort(key=lambda box: boxArea(box), reverse=True)
-    green_rects.sort(key=lambda rect: rectArea(rect), reverse=True)
-
-    green_rect_len = max(green_rects[1][1][0], green_rects[1][1][1])
-    greenBoxArea = rectArea(green_rects[1])
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.show()
+
+    green_boxes.sort(key=lambda box: boxArea(box), reverse=True)
+    green_rects.sort(key=lambda rect: rectArea(rect), reverse=True)
+
+    green_rect_len = pointDistance(green_boxes[0][3], green_boxes[0][0])
+    greenBoxArea = boxArea(green_boxes[1])
 
     '''
     # Processing Step 3: binary thresholding of the entire image to extract the top part of the
     strips
     '''
     ret, thresh = cv2.threshold(image, minStripThreshold, 255, cv2.THRESH_BINARY)
-    thresh = cv2.medianBlur(thresh, thresh.shape[0] // 150)
+    blur_size = thresh.shape[0]//150
+    blur_size = blur_size + 1 if blur_size % 2 == 0 else blur_size # medianBlur size must be odd
+    thresh = cv2.medianBlur(thresh,  blur_size)
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
