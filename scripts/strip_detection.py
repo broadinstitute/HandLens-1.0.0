@@ -140,11 +140,9 @@ def getmin(data):
 # Naive prediction using threshold obtained from set of controls and low concentration samples
 def predict(data, threshold, LODStandardDeviation = 29):
     m, sd, min_pos = getmin(data)
-    slope, y_int = np.polyfit(np.linspace(350, 549, 150).astype(int), [np.mean(row) for
-                                                                       row in data[400: 550]],
-                              deg=1)
+    baseline = np.mean(data[400: 550])
 
-    signal_height = y_int + slope * min_pos - m
+    signal_height = baseline - m
 
     f = ((threshold + LODStandardDeviation) - signal_height) / (LODStandardDeviation*2)
     if f < 0: f = 0
@@ -722,12 +720,8 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     min0, _, min_pos = getmin(data0)
     x = np.linspace(0, 10, 50)
     y = 5 * x + 10 + (np.random.random(len(x)) - 0.5) * 5
-    slope, y_int = np.polyfit(np.linspace(350, 549, 150).astype(int), [np.mean(row) for
-                                                                       row in data0[400: 550]],
-                              deg=1)
-
-    threshold = y_int + slope * min_pos - (
-            min0 - (ThresholdFactor - 0.5) * 2 * LODStandardDeviation)
+    baseline = np.mean(data0[400: 550])
+    threshold = baseline - min0
 
     scores = []
     for i in range(0, len(norm_strip_images) - 1):
