@@ -345,7 +345,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
         plt.show()
     _, maxVal, _, _ = cv2.minMaxLoc(dst)
 
-    minStripThreshold = 0.4 * maxVal
+    minStripThreshold = 0.6 * maxVal
 
     '''
     # Processing Step 2: finding green box candidates
