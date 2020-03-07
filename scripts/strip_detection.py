@@ -17,8 +17,7 @@ else:
     from .strip_analysis import MaxDetector
     from .strip_analysis import correct_input_image
     from .strip_analysis import convert_image_to_linear_signal
-# matplotlib.use("TkAgg")
-# matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 
 
@@ -148,7 +147,6 @@ def predict(data, threshold, LODStandardDeviation = 29):
     if f < 0: f = 0
     if 1 < f: f = 1
     score = 1 - f
-    print(score)
     return score
 
 
