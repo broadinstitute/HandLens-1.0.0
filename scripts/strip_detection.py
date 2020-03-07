@@ -729,7 +729,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
         nimg = correct_input_image(norm_strip_images[i], 'clahe')
         scores.append(predict(nimg.astype('int32'), threshold))
 
-    return scores
+    return scores, strip_boxes
 
 
 def main():
@@ -739,11 +739,30 @@ def main():
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
 
-    scores = getPredictions(args.image_file, args.strip_pixels, args.plotting)
+    scores, strip_boxes = getPredictions(args.image_file, args.strip_pixels, args.plotting)
     class_threshold = 0.7
     truths = ['POSITIVE' if s > class_threshold else 'NEGATIVE' for s in scores]
     truths.append('CONTROL')
-    print(truths)
+
+    # The results string has the following format:
+    # [{(x1,y1):(x2,y2):(x3,y3):(x4,y4);(x1,y1):(x2,y2):(x3,y3):(x4,y4)
+    #      <results>POSITIVE,CONTROL]
+    # where the coordnates are bottom left, top left, top right, and bottom right
+    # coordinates of each strip.
+
+    results_string = '[{'
+    for strip in strip_boxes:
+        for corner in strip:
+            results_string += "(" + str(corner[0]) + "," + str(corner[1]) + "):"
+        results_string = results_string[:-1]  # get rid of trailing colon
+        results_string += ";"
+    results_string = results_string[:-1]  # get rid of trailing semicolon
+    results_string += "}<results>"
+    for result in truths:
+        results_string += result + ","
+    results_string = results_string[:-1]  # get rid of trailing comma
+    results_string += ']'
+    print(results_string)
 
 
 if __name__ == '__main__':
