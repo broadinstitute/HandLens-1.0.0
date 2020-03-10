@@ -511,6 +511,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
     distance_threshold = green_rect_len * 0.15
     merged_boxes = {}
     tmp = image.copy()
+    strip_boxes = []
     for i in range(0, len(top_box_candidates)):
         upper_box = top_box_candidates[i]
         if i in merged_boxes:
@@ -565,7 +566,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
 
     num_boxes = len(top_boxes)
 
-    strip_boxes = []
+    # strip_boxes = []
 
     for i in range(0, num_boxes):
         tbox = top_boxes[i]
@@ -594,7 +595,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
         sbox = np.array([p1, tp1, tp2, p2])
         # #     sbox = np.array([cp1, tp1, tp2, cp2])
 
-        strip_boxes += [sbox]
+        strip_boxes += [np.array([tp0, tp1, tp2, tp3])]
         tmp = cv2.drawContours(tmp, [sbox], 0, (0, 0, 255), 5)
 
     if plotting:
