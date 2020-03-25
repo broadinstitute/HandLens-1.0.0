@@ -137,7 +137,9 @@ def getmin(data):
 
 
 # Naive prediction using threshold obtained from set of controls and low concentration samples
-def predict(data, threshold, LODStandardDeviation = 29):
+def predict(nimg, threshold, LODStandardDeviation = 29):
+    cimg = correct_input_image(nimg, 'clahe')
+    data = cimg.astype('int32')
     m, sd, min_pos = getmin(data)
     baseline = np.mean(data[400: 550])
 
@@ -147,6 +149,23 @@ def predict(data, threshold, LODStandardDeviation = 29):
     if f < 0: f = 0
     if 1 < f: f = 1
     score = 1 - f
+
+    # To check for false-positives related to the plastic ridge of the strip:
+    if score != 0:
+        left_sums = np.array([])
+        data = nimg.astype('int32')
+        nrows = data.shape[0]
+        values = np.array([])
+        dx = 20
+        if min_pos > nrows - dx - 1:
+            return 0
+        for r in range(0, nrows):
+            values = np.append(values, 255 - np.mean(data[r]))
+        for r in range(dx, nrows):
+            left_sums = np.append(left_sums, np.sum(values[r - dx:r]))
+        if left_sums[min_pos] < left_sums[min_pos - dx]:
+            score = 0
+
     return score
 
 
@@ -725,8 +744,7 @@ def getPredictions(filename, stripPixelArea, plotting=False):
 
     scores = []
     for i in range(0, len(norm_strip_images) - 1):
-        nimg = correct_input_image(norm_strip_images[i], 'clahe')
-        scores.append(predict(nimg.astype('int32'), threshold))
+        scores.append(predict(norm_strip_images[i], threshold))
 
     return scores, strip_boxes
 
