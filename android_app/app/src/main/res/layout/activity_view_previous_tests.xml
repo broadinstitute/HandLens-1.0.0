@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ViewPreviousTestsActivity">
+
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        xmlns:tools="http://schemas.android.com/tools"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#fff"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent"
+            android:layout_weight="1"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_centerHorizontal="true"
+                    android:layout_centerVertical="true"
+                    android:layout_margin="10dp"
+                    android:orientation="vertical">
+                    <!--            android:background="@drawable/layoutstyle"-->
+                    <HorizontalScrollView
+                        android:layout_width="match_parent"
+                        android:layout_height="fill_parent">
+
+                        <TableLayout
+                            android:id="@+id/resultsTable"
+                            android:layout_width="fill_parent"
+                            android:layout_height="fill_parent"
+                            android:isScrollContainer="true"
+                            android:padding="10dip">
+
+                            <TableRow
+                                android:id="@+id/tableRow1"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content">
+
+                                <TextView
+                                    android:id="@+id/date"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:fontFamily="serif"
+                                    android:textColor="#000" />
+                                <!--                    android:text="Date"/>-->
+                                <TextView
+                                    android:id="@+id/sample_name"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:fontFamily="serif"
+                                    android:textColor="#000" />
+                                <!--                    android:text="ID"/>-->
+                                <TextView
+                                    android:id="@+id/results"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:fontFamily="serif"
+                                    android:textColor="#000" />
+                                <!--                    android:text="Results"/>-->
+                                <TextView
+                                    android:id="@+id/pictureButton"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:fontFamily="serif"
+                                    android:textColor="#000" />
+                                <!--                    android:text="Picture"/>-->
+                                <TextView
+                                    android:id="@+id/deleteButton"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:fontFamily="serif"
+                                    android:textColor="#000" />
+                                <!--                    android:text="Delete"/>-->
+                            </TableRow>
+                        </TableLayout>
+                    </HorizontalScrollView>
+
+                    <ListView
+                        android:id="@+id/records_view"
+                        android:layout_width="match_parent"
+                        android:layout_height="500dp"
+                        android:layout_marginTop="16dp"></ListView>
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
