@@ -2,7 +2,7 @@
 
 This is a mobile phone application that captures and analyzes an image of one or more lateral flow strips to quantify test results and resolve ambiguous readouts.
 
-# What's in the repo?
+## What's in the repo?
 
 This repo contains code for testing the strip detetection algorithms, the backend server that implements those algorithms as Python scripts, and the Android app frontend:
 
