@@ -1,5 +1,5 @@
 # Overview
-multipart.js is a server implemented in node.js which enables the SHERLOCK-Reader app to
+multipart.js is a server implemented in node.js which enables the Handlens app to
 upload and analyze images. When installed and running, the server listens on port 3000
 for push requests. 
 
