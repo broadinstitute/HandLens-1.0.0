@@ -2,6 +2,7 @@ from __future__ import division
 import cv2
 import numpy as np
 import argparse
+from skimage.draw import line, polygon
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -13,7 +14,7 @@ def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, s
     # Filter the image to enhance various features
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
 
-    scores = [None] * strip_count
+    unnormalized_scores = [None] * strip_count
     strips_tlx = [None] * strip_count  # top left x-values
     strips_tly = [None] * strip_count  # top right x-values
     strips_brx = [None] * strip_count  # bottom right x-values
@@ -23,6 +24,8 @@ def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, s
     tube_bottom_height = (strip_br_y - strip_tl_y) / strip_count
 
     tmp = image.copy()
+    tmp_filtered = image.copy()
+
     for i in range(0, strip_count):
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
@@ -39,40 +42,108 @@ def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, s
         box[2] = np.asarray([strips_brx[i], strips_bry[i]])  # bottom right
         box[3] = np.asarray([strips_tlx[i], strips_bry[i]])  # bottom left
         box = np.array(box).reshape((-1, 1, 2)).astype(np.int32)
-        tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 10)
 
         # focus in on the tube liquid's enclosing area
-        subimage = image[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i], 1]
-        # # blue channel is all noise, so get rid of it:
-        # subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
+        subimage = image[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i]]
+        # blue channel is all noise, so get rid of it:
+        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
 
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
         # kernel to traverse through the tube's enclosing area to find the portion with the highest
         # signal.
-        kernel_height = int(tube_bottom_height / 2)
-        kernel_width = int(tube_dx / 2)
-        kernel = np.ones((kernel_height, kernel_width), np.float32) / (kernel_width * kernel_height)
-        # trapezoid = np.zeros((4, 2))
-        # trapezoid[0] = np.asarray([0, 0])  # top left
-        # trapezoid[1] = np.asarray([tube_dx / 2, 0])  # top right
-        # trapezoid[2] = np.asarray([tube_dx / 2, int(tube_bottom_height / 2)])  # bottom right
-        # trapezoid[3] = np.asarray([0, int(tube_bottom_height / 2)])  # bottom left
-        # cv2.fillPoly(kernel, [trapezoid])
-        sums = cv2.filter2D(subimage, -1, kernel)
-        _, maxVal, _, _ = cv2.minMaxLoc(sums)
+        kernel = create_kernel(tube_dx, tube_bottom_height, plotting)
+        blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
+        blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
 
-        scores[i] = np.sum(maxVal)
+        _, maxVal, _, _ = cv2.minMaxLoc(blurs_green + blurs_red)
+
+        # let's get background intensity so we can normalize the signal from the fluorescent liquid
+        bckgrnd_subimage = image[strips_tly[i]:strips_bry[i],
+                           int(strips_tlx[i] - tube_dx / 2):strips_tlx[i]]
+        unnormalized_scores[i] = maxVal / ((cv2.mean(bckgrnd_subimage[:, :, 1])[0] + cv2.mean(
+            bckgrnd_subimage[:, :, 2])[0]) / 2)
+        # unnormalized_scores[i] = maxVal
+        if plotting:
+            tmp[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i], 1] = blurs_green
+            tmp[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i], 2] = blurs_red
+            tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 2)
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
     plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
     plt.show()
 
-    thresh = scores[-1] * 1.2
-    print(scores)
+    thresh = 1.2
+    final_score = [score / unnormalized_scores[-1] for score in unnormalized_scores]
+    print(final_score)
+    return ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
 
-    return ["Positive" if score > thresh else "Negative" for score in scores[0:-1]]
+
+def create_kernel(tube_dx, tube_bottom_height, plotting):
+    """
+    :return: a trapezoidal kernel
+    """
+    kernel_height = int(tube_bottom_height)
+    kernel_width = int(tube_dx)
+    kernel = np.zeros((kernel_height, kernel_width), np.float32)
+    trap_height_large = int(38 * tube_bottom_height / 75)
+    trap_height_small = int(18 * tube_bottom_height / 75)
+    trap_length = int(55 * tube_dx / 70)
+    trapezoid = np.zeros((4, 2))
+    trapezoid[0] = np.asarray([kernel_height / 2 - trap_height_small / 2, 0])  # top left
+    trapezoid[1] = np.asarray([kernel_height / 2 - trap_height_large / 2, trap_length])  # top right
+    trapezoid[2] = np.asarray(
+        [kernel_height / 2 + trap_height_large / 2, trap_length])  # bottom right
+    trapezoid[3] = np.asarray([kernel_height / 2 + trap_height_small / 2, 0])  # bottom left
+    rr, cc = polygon(trapezoid[:, 0], trapezoid[:, 1], kernel.shape)
+    kernel[rr, cc] = 1
+    kernel = kernel / cv2.sumElems(kernel)[0]
+    if plotting:
+        plt.imshow(kernel)
+    return kernel
+
+
+# from https://stackoverflow.com/a/37123933
+def check(p1, p2, base_array):
+    """
+    Uses the line defined by p1 and p2 to check array of
+    input indices against interpolated value
+
+    Returns boolean array, with True inside and False outside of shape
+    """
+    idxs = np.indices(base_array.shape)  # Create 3D array of indices
+
+    p1 = p1.astype(float)
+    p2 = p2.astype(float)
+
+    # Calculate max column idx for each row idx based on interpolated line between two points
+    if p1[0] == p2[0]:
+        max_col_idx = (idxs[0] - p1[0]) * idxs.shape[1]
+        sign = np.sign(p2[1] - p1[1])
+    else:
+        max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
+        sign = np.sign(p2[0] - p1[0])
+    return idxs[1] * sign <= max_col_idx * sign
+
+
+# from https://stackoverflow.com/a/37123933
+def create_polygon(shape, vertices):
+    """
+    Creates np.array with dimensions defined by shape
+    Fills polygon defined by vertices with ones, all other values zero"""
+    base_array = np.zeros(shape, dtype=float)  # Initialize your array of zeros
+
+    fill = np.ones(base_array.shape) * True  # Initialize boolean array defining shape fill
+
+    # Create check array for each edge segment, combine into fill array
+    for k in range(vertices.shape[0]):
+        fill = np.all([fill, check(vertices[k - 1], vertices[k], base_array)], axis=0)
+
+    # Set all values inside polygon to one
+    base_array[fill] = 1 / (shape[0] * shape[1])
+
+    return base_array
 
 
 def applyClahetoRGB(bgr_imb):
