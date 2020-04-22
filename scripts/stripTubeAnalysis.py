@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 def getPredictions(image_file, tube_coords_json, plotting):
     image = cv2.imread(image_file)  # image is loaded as BGR
     tube_coords = json.loads(tube_coords_json)
+    f = open(image_file + ".txt", "a")
+    f.write(tube_coords_json)
+    f.close()
     strip_count = len(tube_coords) - 1
     # Filter the image to enhance various features
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
