@@ -70,7 +70,7 @@ def getPredictions(image_file, tube_coords_json, plotting):
         subimage = cv2.bitwise_and(image, image, mask=mask)
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
         background_avg = (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask);
-        unstandardized_scores[i] = maxVal / (background_avg)
+        unstandardized_scores[i] = abs(maxVal - background_avg)/ (background_avg)
         # unstandardized_scores[i] = maxVal
 
 
