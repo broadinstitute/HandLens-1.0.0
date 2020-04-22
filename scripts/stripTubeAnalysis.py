@@ -51,11 +51,7 @@ def getPredictions(image_file, tube_coords_json, plotting):
         kernel = create_kernel(tube_width, tube_height, angle, plotting)
         blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
         blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
-
         _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
-        print("here2")
-
-
 
         # let's get background intensity so we can normalize the signal from the fluorescent liquid
         box = np.zeros((5, 2))
@@ -76,7 +72,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         background_avg = (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask);
         unstandardized_scores[i] = maxVal / (background_avg)
         # unstandardized_scores[i] = maxVal
-        print("here3")
 
 
     if plotting:
