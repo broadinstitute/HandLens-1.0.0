@@ -37,11 +37,12 @@ app.post(
     storage: storage
   }).single('upload'), function(req, res) {
       const { spawn } = require('child_process');
-      const pyProg = spawn('python3', ['../scripts/strip_detection.py', '--image_file', 'uploads/' + req.file.filename, '--strip_pixels', req.headers.mscalefactor]);
+      const pyProg = spawn('python3', ['../scripts/stripTubeAnalysis.py', '--image_file', 'uploads/' + req.file.filename, '--tubeCoords', req.headers.tubecoords]);
       // "--image_file" "C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\Carmen\striptubes1.png"
         // "--strip_tl_x" "42" "--strip_tl_y" "335" "--strip_br_x" "120" "--strip_br_y" "947"
         // "--strip_count" 8 "--plotting"
-      console.log(req.headers.tubeCoords);
+      console.log(req.headers.tubecoords);
+      console.log("hello")
       pyProg.stdout.on('data', function(data) {
           console.log(data.toString());
           res.write(data);
