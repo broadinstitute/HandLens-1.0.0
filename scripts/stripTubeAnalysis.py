@@ -4,47 +4,37 @@ import numpy as np
 import argparse
 from skimage.draw import line, polygon
 import matplotlib
+import json
+import imutils
 import matplotlib.pyplot as plt
 
 
-def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, strip_count,
-                   plotting):
+def getPredictions(image_file, tube_coords_json, plotting):
     image = cv2.imread(image_file)  # image is loaded as BGR
-
+    tube_coords = json.loads(tube_coords_json)
+    strip_count = len(tube_coords) - 1
     # Filter the image to enhance various features
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
 
-    unnormalized_scores = [None] * strip_count
-    strips_tlx = [None] * strip_count  # top left x-values
-    strips_tly = [None] * strip_count  # top right x-values
-    strips_brx = [None] * strip_count  # bottom right x-values
-    strips_bry = [None] * strip_count  # bottom right x-values
-
-    tube_dx = strip_br_x - strip_tl_x
-    tube_bottom_height = (strip_br_y - strip_tl_y) / strip_count
-
+    unstandardized_scores = [None] * strip_count
     tmp = image.copy()
     tmp_filtered = image.copy()
 
     for i in range(0, strip_count):
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
-        strips_tlx[i] = int(strip_tl_x if i == 0 else strips_tlx[i - 1])
-        strips_brx[i] = int(strips_tlx[0] + tube_dx if i == 0 else strips_tlx[i] + tube_dx)
-        strips_tly[i] = int(strip_tl_y if i == 0 else strips_bry[i - 1])
-        strips_bry[i] = int(
-            strips_tly[0] + tube_bottom_height if i == 0 else strips_tly[i] + tube_bottom_height)
-
         # for plotting purposes, define the 4 corners of this tube's enclosing area.
-        box = np.zeros((4, 2))
-        box[0] = np.asarray([strips_tlx[i], strips_tly[i]])  # top left
-        box[1] = np.asarray([strips_brx[i], strips_tly[i]])  # top right
-        box[2] = np.asarray([strips_brx[i], strips_bry[i]])  # bottom right
-        box[3] = np.asarray([strips_tlx[i], strips_bry[i]])  # bottom left
-        box = np.array(box).reshape((-1, 1, 2)).astype(np.int32)
-
+        box = np.zeros((5, 2))
+        box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top left
+        box[1] = np.asarray([tube_coords[i][2], tube_coords[i][3]])  # top right
+        box[2] = np.asarray([tube_coords[i + 1][2], tube_coords[i + 1][3]])  # bottom right
+        box[3] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom left
+        box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top left
+        rr, cc = polygon(box[:, 0], box[:, 1])
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        mask[rr, cc] = 1
         # focus in on the tube liquid's enclosing area
-        subimage = image[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i]]
+        subimage = cv2.bitwise_and(image, image, mask=mask)
         # blue channel is all noise, so get rid of it:
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
 
@@ -52,22 +42,34 @@ def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, s
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
         # kernel to traverse through the tube's enclosing area to find the portion with the highest
         # signal.
-        kernel = create_kernel(tube_dx, tube_bottom_height, plotting)
+        tube_width = int((box[1][0] - box[0][0]) ** 2 + (box[1][1] - box[0][1]) ** 2) ** 1 / 2
+        tube_height = int((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** 1 / 2
+        angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1]), box[1][0] - box[0][0])
+        kernel = create_kernel(tube_width, tube_height, plotting)
         blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
         blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
 
-        _, maxVal, _, _ = cv2.minMaxLoc(blurs_green + blurs_red)
+        _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
 
         # let's get background intensity so we can normalize the signal from the fluorescent liquid
-        bckgrnd_subimage = image[strips_tly[i]:strips_bry[i],
-                           int(strips_tlx[i] - tube_dx / 2):strips_tlx[i]]
-        unnormalized_scores[i] = maxVal / ((cv2.mean(bckgrnd_subimage[:, :, 1])[0] + cv2.mean(
-            bckgrnd_subimage[:, :, 2])[0]) / 2)
-        # unnormalized_scores[i] = maxVal
+        box = np.zeros((5, 2))
+        box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
+        box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
+        box[2] = np.asarray([tube_coords[i][0] - tube_width / 2, tube_coords[i][1]])  # bottom left
+        box[3] = np.asarray(
+            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i + 1][1]])  # top left
+        box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
+        rr, cc = polygon(box[:, 0], box[:, 1])
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        mask[rr, cc] = 1
+        subimage = cv2.bitwise_and(image, image, mask=mask)
+        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
+        unstandardized_scores[i] = maxVal / (
+                    (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask))
+        # unstandardized_scores[i] = maxVal
         if plotting:
-            tmp[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i], 1] = blurs_green
-            tmp[strips_tly[i]:strips_bry[i], strips_tlx[i]:strips_brx[i], 2] = blurs_red
-            tmp = cv2.drawContours(tmp, [box], 0, (0, 0, 255), 2)
+            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                   0, (0, 0, 255), 2)
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
@@ -75,21 +77,23 @@ def getPredictions(image_file, strip_tl_x, strip_tl_y, strip_br_x, strip_br_y, s
     plt.show()
 
     thresh = 1.2
-    final_score = [score / unnormalized_scores[-1] for score in unnormalized_scores]
+    final_score = [unstandardized_score / unstandardized_scores[-1]
+                   for unstandardized_score in unstandardized_scores]
     print(final_score)
     return ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
 
 
-def create_kernel(tube_dx, tube_bottom_height, plotting):
+def create_kernel(tube_width, tube_height, angle, plotting):
     """
     :return: a trapezoidal kernel
+    kernel_height = int(tube_height
     """
-    kernel_height = int(tube_bottom_height)
-    kernel_width = int(tube_dx)
+    kernel_width = tube_width
+    kernel_height = tube_height
     kernel = np.zeros((kernel_height, kernel_width), np.float32)
-    trap_height_large = int(38 * tube_bottom_height / 75)
-    trap_height_small = int(18 * tube_bottom_height / 75)
-    trap_length = int(55 * tube_dx / 70)
+    trap_height_large = int(38 * tube_height / 75)
+    trap_height_small = int(18 * tube_height / 75)
+    trap_length = int(55 * tube_width / 70)
     trapezoid = np.zeros((4, 2))
     trapezoid[0] = np.asarray([kernel_height / 2 - trap_height_small / 2, 0])  # top left
     trapezoid[1] = np.asarray([kernel_height / 2 - trap_height_large / 2, trap_length])  # top right
@@ -99,6 +103,7 @@ def create_kernel(tube_dx, tube_bottom_height, plotting):
     rr, cc = polygon(trapezoid[:, 0], trapezoid[:, 1], kernel.shape)
     kernel[rr, cc] = 1
     kernel = kernel / cv2.sumElems(kernel)[0]
+    kernel = imutils.rotate_bound(kernel, angle)
     if plotting:
         plt.imshow(kernel)
     return kernel
@@ -166,16 +171,11 @@ def applyClahetoRGB(bgr_imb):
 def main():
     parser = argparse.ArgumentParser('Read strip tubes')
     parser.add_argument('--image_file', required=True)
-    parser.add_argument('--strip_tl_x', required=True, type=int)
-    parser.add_argument('--strip_tl_y', required=True, type=int)
-    parser.add_argument('--strip_br_x', required=True, type=int)
-    parser.add_argument('--strip_br_y', required=True, type=int)
-    parser.add_argument('--strip_count', required=True, type=int)
+    parser.add_argument('--tubeCoords', required=True, type=int)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
 
     args = parser.parse_args()
-    results = getPredictions(args.image_file, args.strip_tl_x, args.strip_tl_y, args.strip_br_x,
-                             args.strip_br_y, args.strip_count, args.plotting)
+    results = getPredictions(args.image_file, args.tubeCoords, args.plotting)
 
     results.append("Control")
     print(results)
