@@ -37,8 +37,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         subimage = cv2.bitwise_and(image, image, mask=mask)
         # blue channel is all noise, so get rid of it:
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
-        plt.imshow(cv2.cvtColor(subimage, cv2.COLOR_BGR2RGB))
-        plt.show()
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
