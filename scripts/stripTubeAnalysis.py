@@ -32,49 +32,59 @@ def getPredictions(image_file, tube_coords_json, plotting):
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top left
         rr, cc = polygon(box[:, 0], box[:, 1])
         mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        mask[rr, cc] = 1
+        mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
         # blue channel is all noise, so get rid of it:
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
+        plt.imshow(cv2.cvtColor(subimage, cv2.COLOR_BGR2RGB))
+        plt.show()
+        if plotting:
+            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                   0, (0, 0, 255), 2)
 
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
         # kernel to traverse through the tube's enclosing area to find the portion with the highest
         # signal.
-        tube_width = int((box[1][0] - box[0][0]) ** 2 + (box[1][1] - box[0][1]) ** 2) ** 1 / 2
-        tube_height = int((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** 1 / 2
-        angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1]), box[1][0] - box[0][0])
-        kernel = create_kernel(tube_width, tube_height, plotting)
+        tube_width = int(((box[1][0] - box[0][0]) ** 2 + (box[1][1] - box[0][1]) ** 2) ** (1 / 2))
+        tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
+        angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
+        kernel = create_kernel(tube_width, tube_height, angle, plotting)
         blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
         blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
 
         _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
+        print("here2")
+
+
 
         # let's get background intensity so we can normalize the signal from the fluorescent liquid
         box = np.zeros((5, 2))
         box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
         box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
-        box[2] = np.asarray([tube_coords[i][0] - tube_width / 2, tube_coords[i][1]])  # bottom left
+        box[2] = np.asarray([tube_coords[i][0] - tube_width / 2, tube_coords[i + 1][1]])  # bottom left
         box[3] = np.asarray(
-            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i + 1][1]])  # top left
+            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
-        rr, cc = polygon(box[:, 0], box[:, 1])
-        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        mask[rr, cc] = 1
-        subimage = cv2.bitwise_and(image, image, mask=mask)
-        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
-        unstandardized_scores[i] = maxVal / (
-                    (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask))
-        # unstandardized_scores[i] = maxVal
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-                                   0, (0, 0, 255), 2)
+                                   0, (255, 0, 0), 2)
+        rr, cc = polygon(box[:, 0], box[:, 1])
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        mask[cc, rr] = 1
+        subimage = cv2.bitwise_and(image, image, mask=mask)
+        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
+        background_avg = (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask);
+        unstandardized_scores[i] = maxVal / (background_avg)
+        # unstandardized_scores[i] = maxVal
+        print("here3")
+
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
-    plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
-    plt.show()
+        plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.show()
 
     thresh = 1.2
     final_score = [unstandardized_score / unstandardized_scores[-1]
@@ -103,7 +113,7 @@ def create_kernel(tube_width, tube_height, angle, plotting):
     rr, cc = polygon(trapezoid[:, 0], trapezoid[:, 1], kernel.shape)
     kernel[rr, cc] = 1
     kernel = kernel / cv2.sumElems(kernel)[0]
-    kernel = imutils.rotate_bound(kernel, angle)
+    kernel = imutils.rotate_bound(kernel, -1*angle)
     if plotting:
         plt.imshow(kernel)
     return kernel
