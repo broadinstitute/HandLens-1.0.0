@@ -87,8 +87,8 @@ def getPredictions(image_file, tube_coords_json, plotting):
     thresh = 1.2
     final_score = [unstandardized_score / unstandardized_scores[-1]
                    for unstandardized_score in unstandardized_scores]
-    print(final_score)
-    return ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
+
+    return final_score, ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
 
 
 def create_kernel(tube_width, tube_height, angle, plotting):
@@ -183,10 +183,10 @@ def main():
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
 
     args = parser.parse_args()
-    results = getPredictions(args.image_file, args.tubeCoords, args.plotting)
+    final_scores, results = getPredictions(args.image_file, args.tubeCoords, args.plotting)
 
     results.append("Control")
-    print(results)
+    print(final_scores)
 
 
 if __name__ == '__main__':
