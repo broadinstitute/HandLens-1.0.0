@@ -171,7 +171,7 @@ def applyClahetoRGB(bgr_imb):
 def main():
     parser = argparse.ArgumentParser('Read strip tubes')
     parser.add_argument('--image_file', required=True)
-    parser.add_argument('--tubeCoords', required=True, type=int)
+    parser.add_argument('--tubeCoords', required=True)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
 
     args = parser.parse_args()
