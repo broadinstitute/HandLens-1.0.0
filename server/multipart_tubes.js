@@ -20,12 +20,7 @@ var fs = require('fs');
 storage = multer.diskStorage({
     destination: './uploads/',
     filename: function(req, file, cb) {
-      return crypto.pseudoRandomBytes(16, function(err, raw) {
-        if (err) {
-          return cb(err);
-        }
-        return cb(null, "" + (raw.toString('hex')) + (path.extname(file.originalname)));
-      });
+      return path.extname(file.originalname);
     }
   });
 
@@ -67,7 +62,7 @@ app.get('/uploads/:upload', function (req, res){
 
 });
 
-var port_numb = 3002
+var port_numb = 3003
 
 app.listen(port_numb, function () {
 	   console.log('Example app listening on port ' + port_numb);

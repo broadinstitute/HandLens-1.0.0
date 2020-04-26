@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 def getPredictions(image_file, tube_coords_json, plotting):
     image = cv2.imread(image_file)  # image is loaded as BGR
     tube_coords = json.loads(tube_coords_json)
-    f = open(image_file + ".txt", "a")
+    f = open(image_file + ".coords.txt", "a")
     f.write(tube_coords_json)
     f.close()
     strip_count = len(tube_coords) - 1
@@ -85,6 +85,10 @@ def getPredictions(image_file, tube_coords_json, plotting):
     thresh = 1.2
     final_score = [unstandardized_score / unstandardized_scores[-1]
                    for unstandardized_score in unstandardized_scores]
+
+    f = open(image_file + ".scores.txt", "a")
+    f.write(json.dump(final_score))
+    f.close()
 
     return final_score, ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
 
