@@ -72,7 +72,7 @@ app.get('/uploads/:upload', function (req, res){
 
 });
 
-var port_numb = 3001;
+var port_numb = 3002;
 
 app.listen(port_numb, function () {
 	   console.log('Example app listening on port ' + port_numb);
