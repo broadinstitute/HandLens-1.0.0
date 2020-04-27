@@ -24,7 +24,7 @@ storage = multer.diskStorage({
         if (err) {
           return cb(err);
         }
-        cb(console.log(path.extname(file.originalname));
+        cb(console.log(path.extname(file.originalname)));
         return cb(null, "" + (raw.toString('hex')) + (path.extname(file.originalname)));
       });
     }
