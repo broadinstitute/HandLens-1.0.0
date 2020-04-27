@@ -20,13 +20,17 @@ var fs = require('fs');
 storage = multer.diskStorage({
     destination: './uploads/',
     filename: function(req, file, cb) {
-      return crypto.pseudoRandomBytes(16, function(err, raw) {
-        if (err) {
-          return cb(err);
+        var fname = file.originalname + "-" +  String(new Date().toISOString()).replace(/[:.]/g, "");
+        var file = new File("./uploads/" + fname + path.extname(file.originalname));
+        let i = 1;
+        var numbered_fname = fname;
+        while (file.exists()){ // in case two users submit the same file name at the same time
+            numbered_fname = fname + String(i);
+            file = new File("./uploads/" + numbered_fname + path.extname(file.originalname));
+            i += 1;
         }
-        cb(console.log(path.extname(file.originalname)));
-        return cb(null, "" + (raw.toString('hex')) + (path.extname(file.originalname)));
-      });
+        console.log(numbered_fname);
+        return cb(null, numbered_fname + path.extname(file.originalname));
     }
   });
 
@@ -68,7 +72,7 @@ app.get('/uploads/:upload', function (req, res){
 
 });
 
-var port_numb = 3002
+var port_numb = 3001;
 
 app.listen(port_numb, function () {
 	   console.log('Example app listening on port ' + port_numb);
