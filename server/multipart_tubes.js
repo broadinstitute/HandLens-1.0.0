@@ -47,7 +47,6 @@ app.post(
         // "--strip_tl_x" "42" "--strip_tl_y" "335" "--strip_br_x" "120" "--strip_br_y" "947"
         // "--strip_count" 8 "--plotting"
       console.log(req.headers.tubecoords);
-      console.log("hello")
       pyProg.stdout.on('data', function(data) {
           console.log(data.toString());
           res.write(data);
