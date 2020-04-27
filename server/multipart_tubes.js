@@ -21,12 +21,12 @@ storage = multer.diskStorage({
     destination: './uploads/',
     filename: function(req, file, cb) {
         var fname = file.originalname + "-" +  String(new Date().toISOString()).replace(/[:.]/g, "");
-        var file = new File("./uploads/" + fname + path.extname(file.originalname));
         let i = 1;
         var numbered_fname = fname;
-        while (file.exists()){ // in case two users submit the same file name at the same time
+        var testfile = new File("./uploads/" + fname + path.extname(file.originalname));
+        while (testfile.exists()){ // in case two users submit the same file name at the same time
             numbered_fname = fname + String(i);
-            file = new File("./uploads/" + numbered_fname + path.extname(file.originalname));
+            testfile = new File("./uploads/" + numbered_fname + path.extname(file.originalname));
             i += 1;
         }
         console.log(numbered_fname);
