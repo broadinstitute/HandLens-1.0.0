@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import argparse
 from skimage.draw import line, polygon
-import matplotlib
+import glob, os
 import json
 import imutils
 import matplotlib.pyplot as plt
@@ -24,6 +24,33 @@ def getPredictions(image_file, tube_coords_json, plotting):
     tmp_filtered = image.copy()
 
     for i in range(0, strip_count):
+
+        tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
+                tube_coords[i][3] - tube_coords[i][1]) ** 2) ** (1 / 2))
+        tube_height = int(((tube_coords[i + 1][0] - tube_coords[i][0]) ** 2 + (
+                tube_coords[i + 1][0] - tube_coords[i][1]) ** 2) ** (1 / 2))
+        angle = np.rad2deg(np.arctan2(tube_coords[i][0] - tube_coords[i][3],
+                                      tube_coords[i][2] - tube_coords[i][0]))
+        # let's get background intensity so we can normalize the signal from the fluorescent liquid
+        box = np.zeros((5, 2))
+        box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
+        box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
+        box[2] = np.asarray(
+            [tube_coords[i][0] - tube_width / 2, tube_coords[i + 1][1]])  # bottom left
+        box[3] = np.asarray(
+            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
+        box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
+        if plotting:
+            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                   0, (255, 0, 0), 2)
+        rr, cc = polygon(box[:, 0], box[:, 1])
+        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        mask[cc, rr] = 1
+        subimage2 = cv2.bitwise_and(image, image, mask=mask)
+        subimage2[:, :, 0] = np.zeros([subimage2.shape[0], subimage2.shape[1]])
+        bkgd_red = (np.sum(subimage2[:, :, 2])) / np.sum(mask)
+        bkgd_grn = (np.sum(subimage2[:, :, 1])) / np.sum(mask)
+
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
         # for plotting purposes, define the 4 corners of this tube's enclosing area.
@@ -40,46 +67,34 @@ def getPredictions(image_file, tube_coords_json, plotting):
         subimage = cv2.bitwise_and(image, image, mask=mask)
         # blue channel is all noise, so get rid of it:
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
-        if plotting:
-            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-                                   0, (0, 0, 255), 2)
-
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
         # kernel to traverse through the tube's enclosing area to find the portion with the highest
         # signal.
-        tube_width = int(((box[1][0] - box[0][0]) ** 2 + (box[1][1] - box[0][1]) ** 2) ** (1 / 2))
-        tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
-        angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
+        subimage = subimage.astype('float64')
+        subimage[:, :, 1] -= bkgd_grn
+        subimage[subimage[:, :, 1] < 0] = 0
+        subimage[:, :, 2] -= bkgd_red
+        subimage[subimage[:, :, 2] < 0] = 0
         kernel = create_kernel(tube_width, tube_height, angle, plotting)
         blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
         blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
         _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
-
-        # let's get background intensity so we can normalize the signal from the fluorescent liquid
-        box = np.zeros((5, 2))
-        box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
-        box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
-        box[2] = np.asarray([tube_coords[i][0] - tube_width / 2, tube_coords[i + 1][1]])  # bottom left
-        box[3] = np.asarray(
-            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
-        box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
+        print(maxVal)
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-                                   0, (255, 0, 0), 2)
-        rr, cc = polygon(box[:, 0], box[:, 1])
-        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        mask[cc, rr] = 1
-        subimage = cv2.bitwise_and(image, image, mask=mask)
-        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
-        background_avg = (np.sum(subimage[:, :, 1]) + np.sum(subimage[:, :, 2])) / np.sum(mask);
-        unstandardized_scores[i] = abs(maxVal - background_avg)/ (background_avg)
-        # unstandardized_scores[i] = maxVal
+                                   0, (0, 0, 255), 2)
+            plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+            plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            plt.show()
 
+        unstandardized_scores[i] = abs(maxVal)
+        # unstandardized_scores[i] = maxVal
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
+        plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
 
     thresh = 1.2
@@ -87,10 +102,11 @@ def getPredictions(image_file, tube_coords_json, plotting):
                    for unstandardized_score in unstandardized_scores]
 
     f = open(image_file + ".scores.txt", "a")
-    f.write(json.dump(final_score))
+    f.write(json.dumps(final_score))
     f.close()
 
-    return final_score, ["Positive" if score > thresh else "Negative" for score in final_score[0:-1]]
+    return final_score, ["Positive" if score > thresh else "Negative" for score in
+                         final_score[0:-1]]
 
 
 def create_kernel(tube_width, tube_height, angle, plotting):
@@ -113,9 +129,12 @@ def create_kernel(tube_width, tube_height, angle, plotting):
     rr, cc = polygon(trapezoid[:, 0], trapezoid[:, 1], kernel.shape)
     kernel[rr, cc] = 1
     kernel = kernel / cv2.sumElems(kernel)[0]
-    kernel = imutils.rotate_bound(kernel, -1*angle)
+    kernel = imutils.rotate_bound(kernel, -1 * angle)
     if plotting:
+        plt.figure()
         plt.imshow(kernel)
+        plt.show()
+
     return kernel
 
 
@@ -180,15 +199,26 @@ def applyClahetoRGB(bgr_imb):
 
 def main():
     parser = argparse.ArgumentParser('Read strip tubes')
-    parser.add_argument('--image_file', required=True)
-    parser.add_argument('--tubeCoords', required=True)
+    parser.add_argument('--image_file', required=False)
+    parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
-
     args = parser.parse_args()
-    final_scores, results = getPredictions(args.image_file, args.tubeCoords, args.plotting)
 
-    results.append("Control")
-    print(final_scores)
+    if args.image_file is None:
+        for file in glob.glob(
+                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
+            print(file + ".txt")
+            tube_coords = None
+            with open(file + ".txt") as f:
+                for line in f:
+                    tube_coords = line
+            final_scores, results = getPredictions(file, tube_coords, plotting=True)
+            print(final_scores)
+            print()
+    else:
+        final_scores, results = getPredictions(args.image_file, args.tubeCoords, args.plotting)
+        results.append("Control")
+        print(final_scores)
 
 
 if __name__ == '__main__':
