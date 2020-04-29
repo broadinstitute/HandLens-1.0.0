@@ -23,12 +23,14 @@ storage = multer.diskStorage({
         var fname = file.originalname + "-" +  String(new Date().toISOString()).replace(/[:.]/g, "");
         let i = 1;
         var numbered_fname = fname;
-        var testfile = new File("./uploads/" + fname + path.extname(file.originalname));
-        while (testfile.exists()){ // in case two users submit the same file name at the same time
+        var numbered_fname_ext = "./uploads/" + fname + path.extname(file.originalname);
+	try{
+        while (fs.existsSync(numbered_fname_ext)){ // in case two users submit the same file name at the same time
             numbered_fname = fname + String(i);
-            testfile = new File("./uploads/" + numbered_fname + path.extname(file.originalname));
+            numbered_fname_ext = "./uploads/" + numbered_fname + path.extname(file.originalname);
             i += 1;
-        }
+        }}
+	catch (err){console.error(err);}
         console.log(numbered_fname);
         return cb(null, numbered_fname + path.extname(file.originalname));
     }
