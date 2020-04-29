@@ -47,6 +47,10 @@ def getPredictions(image_file, tube_coords_json, plotting):
         bkgd_red = np.median(subimage2[cc, rr, 2])  # (np.sum(subimage2[:, :, 2])) / np.sum(mask)
         bkgd_grn = np.median(subimage2[cc, rr, 1])  # (np.sum(subimage2[:, :, 1])) / np.sum(mask)
         bkgd_blu = np.median(subimage2[cc, rr, 0])  # (np.sum(subimage2[:, :, 0])) / np.sum(mask)
+        # print(
+        #     "bkgd_red new: {}; old: {}".format(bkgd_red, np.sum(subimage2[:, :, 2]) / np.sum(mask)))
+        # print(
+        #     "bkgd_grn new: {}; old: {}".format(bkgd_grn, np.sum(subimage2[:, :, 1]) / np.sum(mask)))
 
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
@@ -62,11 +66,11 @@ def getPredictions(image_file, tube_coords_json, plotting):
         mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
-        # blue channel is all noise, so get rid of it:
         blue_cutoff = 55
         blue_mask = cv2.inRange(subimage[:, :, 0], blue_cutoff, 255)
         subimage[blue_mask, 1] = 2 * bkgd_grn
         subimage[blue_mask, 2] = 2 * bkgd_red
+        # blue channel is all noise, so get rid of it:
         subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
@@ -77,7 +81,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         cv2.threshold(subimage[:, :, 1], 0, 0, cv2.THRESH_TOZERO, np.float32(subimage[:, :, 1]))
         subimage[:, :, 2] -= bkgd_red
         cv2.threshold(subimage[:, :, 2], 0, 0, cv2.THRESH_TOZERO, np.float32(subimage[:, :, 2]))
-        subimage[:, :, 2] -= bkgd_red
         tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
         angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
         kernel = create_kernel(tube_width, tube_height, angle, plotting)
@@ -90,8 +93,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         #     plt.hist(subimage.ravel(), 256, [0, 256], log=True)
         #     plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
         #     plt.show()
-
-        tube_width = int(((box[1][0] - box[0][0]) ** 2 + (box[1][1] - box[0][1]) ** 2) ** (1 / 2))
         unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
 
@@ -199,13 +200,19 @@ def applyClahetoRGB(bgr_imb):
     return final
 
 
+def run_analysis(file, tube_coords, threshold, plotting=False):
+    final_scores = getPredictions(file, tube_coords, plotting)
+    calls = [1 if x > threshold else 0 for x in final_scores]
+    print(json.dumps({"final_scores": final_scores, "calls": calls}))
+
+
 def main():
     parser = argparse.ArgumentParser('Read strip tubes')
     parser.add_argument('--image_file', required=False)
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 2.25
+    threshold = 2.5
 
     if args.image_file is None:
         for file in glob.glob(
@@ -213,16 +220,12 @@ def main():
             print(file + ".txt")
             tube_coords = None
             with open(file + ".txt") as f:
-                for line in f:
+                for line in f:  # there should only be one line in file f
                     tube_coords = line
-            final_scores = getPredictions(file, tube_coords, plotting=True)
-            print("{}; {}".format(final_scores,
-                                  ['pos' if x > threshold else 'neg' for x in final_scores]))
+            run_analysis(file, tube_coords, threshold, plotting=True)
             print()
     else:
-        final_scores = getPredictions(args.image_file, args.tubeCoords, args.plotting)
-        print("{}; {}".format(final_scores,
-                              ['pos' if x > threshold else 'neg' for x in final_scores]))
+        final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
 
 
 if __name__ == '__main__':
