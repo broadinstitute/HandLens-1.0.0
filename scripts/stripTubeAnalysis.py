@@ -66,21 +66,27 @@ def getPredictions(image_file, tube_coords_json, plotting):
         mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
-        blue_cutoff = 55
-        blue_mask = cv2.inRange(subimage[:, :, 0], blue_cutoff, 255)
-        subimage[blue_mask, 1] = 2 * bkgd_grn
-        subimage[blue_mask, 2] = 2 * bkgd_red
+        blue_cutoff = 50
+        b, g, r = cv2.split(subimage)
+        blue_mask = b[:, :] > blue_cutoff
+        g[blue_mask] = 0
+        r[blue_mask] = 0
         # blue channel is all noise, so get rid of it:
-        subimage[:, :, 0] = np.zeros([subimage.shape[0], subimage.shape[1]])
+        b[:, :] = np.zeros([b.shape[0], b.shape[1]])
+        # subtract away background noise level
+        g_mask = g[:, :] < bkgd_grn.astype("uint8") + 1
+        r_mask = r[:, :] < bkgd_red.astype("uint8") + 1
+        g -= bkgd_grn.astype("uint8")
+        r -= bkgd_red.astype("uint8")
+        g[g_mask] = 0
+        r[r_mask] = 0
+        g[blue_mask] = np.mean(g[cc, rr])
+        r[blue_mask] = np.mean(r[cc, rr])
+        subimage = cv2.merge([b, g, r])
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
         # kernel to traverse through the tube's enclosing area to find the portion with the highest
         # signal.
-        subimage = subimage.astype('float64')
-        subimage[:, :, 1] -= bkgd_grn
-        cv2.threshold(subimage[:, :, 1], 0, 0, cv2.THRESH_TOZERO, np.float32(subimage[:, :, 1]))
-        subimage[:, :, 2] -= bkgd_red
-        cv2.threshold(subimage[:, :, 2], 0, 0, cv2.THRESH_TOZERO, np.float32(subimage[:, :, 2]))
         tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
         angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
         kernel = create_kernel(tube_width, tube_height, angle, plotting)
@@ -90,9 +96,14 @@ def getPredictions(image_file, tube_coords_json, plotting):
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
-        #     plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-        #     plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-        #     plt.show()
+
+            # if i < 4:
+            #     plt.imshow(cv2.cvtColor(subimage, cv2.COLOR_BGR2RGB))
+            #     plt.show()
+            #     plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+            #     plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            #     plt.show()
+
         unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
 
@@ -217,7 +228,10 @@ def main():
     if args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
+            if not ("3916" in file or "67aa" in file or "88eb9" in file or "4cb" in file):
+                continue
             print(file + ".txt")
+
             tube_coords = None
             with open(file + ".txt") as f:
                 for line in f:  # there should only be one line in file f
