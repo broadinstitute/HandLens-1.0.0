@@ -36,9 +36,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         box[3] = np.asarray(
             [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
-        if plotting:
-            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-                                   0, (255, 0, 0), 2)
         rr, cc = polygon(box[:, 0], box[:, 1])
         mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
         mask[cc, rr] = 1
@@ -47,7 +44,11 @@ def getPredictions(image_file, tube_coords_json, plotting):
         bkgd_red = np.median(subimage2[cc, rr, 2])  # (np.sum(subimage2[:, :, 2])) / np.sum(mask)
         bkgd_grn = np.median(subimage2[cc, rr, 1])  # (np.sum(subimage2[:, :, 1])) / np.sum(mask)
         bkgd_blu = np.median(subimage2[cc, rr, 0])  # (np.sum(subimage2[:, :, 0])) / np.sum(mask)
-
+        if plotting:
+            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                   0, (255, 0, 0), 2)
+            plt.imshow(cv2.cvtColor(subimage2, cv2.COLOR_BGR2RGB))
+            plt.show()
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
         # for plottindasdg purposes, define the 4 corners of this tube's enclosing area.
@@ -62,6 +63,9 @@ def getPredictions(image_file, tube_coords_json, plotting):
         mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
+        plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+        plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+        plt.show()
         blue_cutoff = 50
         b, g, r = cv2.split(subimage)
         blue_mask = b[:, :] > blue_cutoff
@@ -70,8 +74,8 @@ def getPredictions(image_file, tube_coords_json, plotting):
         # blue channel is all noise, so get rid of it:
         b[:, :] = np.zeros([b.shape[0], b.shape[1]])
         # subtract away background noise level
-        g_mask = g[:, :] < bkgd_grn.astype("uint8") + 1
-        r_mask = r[:, :] < bkgd_red.astype("uint8") + 1
+        g_mask = g[:, :] < (bkgd_grn.astype("uint8") + 1)
+        r_mask = r[:, :] < (bkgd_red.astype("uint8") + 1)
         g -= bkgd_grn.astype("uint8")
         r -= bkgd_red.astype("uint8")
         g[g_mask] = 0
@@ -220,14 +224,14 @@ def main():
     if True:  # args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
-            print(file)
-
-            tube_coords = None
-            with open(file + ".coords.txt") as f:
-                for line in f:  # there should only be one line in file f
-                    tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True)
-            print()
+            if "IMG_Optimized OnePot 30mins.jpg-2020-04-28T213631494Z.jpg" in file:
+                print(file)
+                tube_coords = None
+                with open(file + ".coords.txt") as f:
+                    for line in f:  # there should only be one line in file f
+                        tube_coords = line
+                run_analysis(file, tube_coords, threshold, plotting=True)
+                print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
 
