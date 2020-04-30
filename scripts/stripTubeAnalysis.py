@@ -47,8 +47,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (255, 0, 0), 2)
-            plt.imshow(cv2.cvtColor(subimage2, cv2.COLOR_BGR2RGB))
-            plt.show()
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
         # for plottindasdg purposes, define the 4 corners of this tube's enclosing area.
@@ -66,7 +64,7 @@ def getPredictions(image_file, tube_coords_json, plotting):
         plt.hist(subimage.ravel(), 256, [0, 256], log=True)
         plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
         plt.show()
-        blue_cutoff = 50
+        blue_cutoff = 100
         b, g, r = cv2.split(subimage)
         blue_mask = b[:, :] > blue_cutoff
         g[blue_mask] = 0
@@ -96,9 +94,9 @@ def getPredictions(image_file, tube_coords_json, plotting):
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
-            plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-            plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-            plt.show()
+            # plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+            # plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            # plt.show()
 
         unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
@@ -219,9 +217,9 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 2.5
+    threshold = 2.75
 
-    if True:  # args.image_file is None:
+    if args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
             if "IMG_Optimized OnePot 30mins.jpg-2020-04-28T213631494Z.jpg" in file:
