@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 def getPredictions(image_file, tube_coords_json, plotting):
     image = cv2.imread(image_file)  # image is loaded as BGR
     tube_coords = json.loads(tube_coords_json)
-    f = open(image_file + ".coords.txt", "a")
+    f = open(image_file + ".coords.txt", "w")
     f.write(tube_coords_json)
     f.close()
     strip_count = len(tube_coords) - 1
@@ -47,10 +47,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         bkgd_red = np.median(subimage2[cc, rr, 2])  # (np.sum(subimage2[:, :, 2])) / np.sum(mask)
         bkgd_grn = np.median(subimage2[cc, rr, 1])  # (np.sum(subimage2[:, :, 1])) / np.sum(mask)
         bkgd_blu = np.median(subimage2[cc, rr, 0])  # (np.sum(subimage2[:, :, 0])) / np.sum(mask)
-        # print(
-        #     "bkgd_red new: {}; old: {}".format(bkgd_red, np.sum(subimage2[:, :, 2]) / np.sum(mask)))
-        # print(
-        #     "bkgd_grn new: {}; old: {}".format(bkgd_grn, np.sum(subimage2[:, :, 1]) / np.sum(mask)))
 
         # In theory, tlx and brx values don't need to be arrays. However, when we add support for
         # rotated boxes, we will need array support anyways.
@@ -96,6 +92,9 @@ def getPredictions(image_file, tube_coords_json, plotting):
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
+            plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+            plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            plt.show()
 
         unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
@@ -109,7 +108,7 @@ def getPredictions(image_file, tube_coords_json, plotting):
     final_score = [unstandardized_score / unstandardized_scores[-1]
                    for unstandardized_score in unstandardized_scores]
 
-    f = open(image_file + ".scores.txt", "a")
+    f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
     f.close()
 
@@ -218,15 +217,13 @@ def main():
     args = parser.parse_args()
     threshold = 2.5
 
-    if args.image_file is None:
+    if True:  # args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
-            if not ("3916" in file or "67aa" in file or "88eb9" in file or "4cb" in file):
-                continue
-            print(file + ".txt")
+            print(file)
 
             tube_coords = None
-            with open(file + ".txt") as f:
+            with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
             run_analysis(file, tube_coords, threshold, plotting=True)
