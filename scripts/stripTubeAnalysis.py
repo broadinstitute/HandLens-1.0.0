@@ -97,13 +97,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
 
-            # if i < 4:
-            #     plt.imshow(cv2.cvtColor(subimage, cv2.COLOR_BGR2RGB))
-            #     plt.show()
-            #     plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-            #     plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-            #     plt.show()
-
         unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
 
