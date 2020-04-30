@@ -222,14 +222,13 @@ def main():
     if args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
-            if "IMG_Optimized OnePot 30mins.jpg-2020-04-28T213631494Z.jpg" in file:
-                print(file)
-                tube_coords = None
-                with open(file + ".coords.txt") as f:
-                    for line in f:  # there should only be one line in file f
-                        tube_coords = line
-                run_analysis(file, tube_coords, threshold, plotting=True)
-                print()
+            print(file)
+            tube_coords = None
+            with open(file + ".coords.txt") as f:
+                for line in f:  # there should only be one line in file f
+                    tube_coords = line
+            run_analysis(file, tube_coords, threshold, plotting=True)
+            print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
 
