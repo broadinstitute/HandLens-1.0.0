@@ -6,10 +6,11 @@ from skimage.draw import line, polygon
 import glob, os
 import json
 import imutils
+from scipy import stats
 import matplotlib.pyplot as plt
 
 
-def getPredictions(image_file, tube_coords_json, plotting):
+def getPredictions(image_file, tube_coords_json, plotting, plt_hists=False):
     image = cv2.imread(image_file)  # image is loaded as BGR
     tube_coords = json.loads(tube_coords_json)
     f = open(image_file + ".coords.txt", "w")
@@ -23,6 +24,7 @@ def getPredictions(image_file, tube_coords_json, plotting):
     tmp = image.copy()
     tmp_filtered = image.copy()
 
+    subimages_values = []
     for i in range(0, strip_count):
 
         tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
@@ -61,9 +63,6 @@ def getPredictions(image_file, tube_coords_json, plotting):
         mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
-        plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-        plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-        plt.show()
         blue_cutoff = 100
         b, g, r = cv2.split(subimage)
         blue_mask = b[:, :] > blue_cutoff
@@ -87,19 +86,28 @@ def getPredictions(image_file, tube_coords_json, plotting):
         # signal.
         tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
         angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
-        kernel = create_kernel(tube_width, tube_height, angle, plotting)
-        blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
-        blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
-        _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
+        # kernel = create_kernel(tube_width, tube_height, angle, plotting)
+        # blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
+        # blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
+        # _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
-            # plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-            # plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-            # plt.show()
-
-        unstandardized_scores[i] = abs(maxVal)
+            if plt_hists:
+                plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+                plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+                plt.show()
+        # unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
+        hist, _ = np.histogram(subimage.ravel(), bins=[x for x in range(1, 255)])
+        # print(hist)
+        loghist = np.ceil((np.log(hist + 1)*100)).astype(int)
+        # print(log10hist)
+        logpdf = []
+        for i in range(0, len(loghist)):
+            logpdf.append([i]*loghist[i])
+        subimages_values.append(logpdf)
+        # subimages_values.append(subimage.ravel())
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
@@ -107,8 +115,12 @@ def getPredictions(image_file, tube_coords_json, plotting):
         plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
 
-    final_score = [unstandardized_score / unstandardized_scores[-1]
-                   for unstandardized_score in unstandardized_scores]
+    final_score = []
+    for i in range(0, len(subimages_values)):
+        _, p = stats.ks_2samp(subimages_values[i], subimages_values[-1])
+        final_score.append(p)
+    # final_score = [unstandardized_score / unstandardized_scores[-1]
+    #                for unstandardized_score in unstandardized_scores]
 
     f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
@@ -207,7 +219,7 @@ def applyClahetoRGB(bgr_imb):
 
 def run_analysis(file, tube_coords, threshold, plotting=False):
     final_scores = getPredictions(file, tube_coords, plotting)
-    calls = [1 if x > threshold else 0 for x in final_scores]
+    calls = [1 if x < threshold else 0 for x in final_scores]
     print(json.dumps({"final_scores": final_scores, "calls": calls}))
 
 
@@ -217,13 +229,16 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 2.75
+    threshold = .05
 
     if args.image_file is None:
         for file in glob.glob(
-                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\jon_pictures\uploads\*jpg'):
-            print(file)
+                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
             tube_coords = None
+            # if "NTCs" not in file:
+            #     continue
+            print(file)
+
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
