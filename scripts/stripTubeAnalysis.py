@@ -3,19 +3,35 @@ import cv2
 import numpy as np
 import argparse
 from skimage.draw import line, polygon
+from sklearn.mixture import GaussianMixture
 import glob, os
 import json
 import imutils
-from scipy import stats
 import matplotlib.pyplot as plt
+import itertools
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+from scipy import linalg
 
 
-def getPredictions(image_file, tube_coords_json, plotting, plt_hists=False):
+def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     image = cv2.imread(image_file)  # image is loaded as BGR
     tube_coords = json.loads(tube_coords_json)
     f = open(image_file + ".coords.txt", "w")
     f.write(tube_coords_json)
     f.close()
+    im_lower_dim = min(image.shape[0], image.shape[1])
+    # blur_size = np.round(im_lower_dim / 500)
+    # blur_size = int(blur_size if blur_size % 2 == 1 else blur_size + 1)
+    # cv2.GaussianBlur(image, (blur_size, blur_size),
+    #                  cv2.BORDER_DEFAULT)
+    # resize large images
+    resize_factor = 1
+    if im_lower_dim > 1000:
+        resize_factor = 1000 / im_lower_dim
+        image = cv2.resize(image, None, fx=resize_factor, fy=resize_factor,
+                           interpolation=cv2.INTER_AREA)
+    tube_coords = np.asarray(tube_coords) * resize_factor
     strip_count = len(tube_coords) - 1
     # Filter the image to enhance various features
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
@@ -24,7 +40,6 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hists=False):
     tmp = image.copy()
     tmp_filtered = image.copy()
 
-    subimages_values = []
     for i in range(0, strip_count):
 
         tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
@@ -70,6 +85,75 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hists=False):
         r[blue_mask] = 0
         # blue channel is all noise, so get rid of it:
         b[:, :] = np.zeros([b.shape[0], b.shape[1]])
+        r[:, :] = np.zeros([b.shape[0], b.shape[1]])
+        subimage = cv2.merge([b, g, r])
+        cv_types = ['full']
+        if plt_hist and plotting:
+            plt.hist(subimage.ravel(), 256, [1, 256], log=True)
+            plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            plt.show()
+
+        X = g.ravel()[g.ravel() != 0].reshape(-1, 1)
+        N = np.arange(1, 11)
+        models = [None for i in range(len(N))]
+
+        for j in range(len(N)):
+            models[j] = GaussianMixture(N[j]).fit(X)
+
+        # compute the AIC and the BIC
+        AIC = [m.aic(X) for m in models]
+        BIC = [m.bic(X) for m in models]
+        print(AIC)
+        fig = plt.figure(figsize=(15, 5.1))
+        fig.subplots_adjust(left=0.12, right=0.97,
+                            bottom=0.21, top=0.9, wspace=0.5)
+
+        # plot 1: data + best-fit mixture
+        ax = fig.add_subplot(121)
+        M_best = models[np.argmin(AIC)]
+
+        x = np.linspace(0, 255, 1000)
+        logprob = M_best.score_samples(x.reshape(-1, 1))
+        responsibilities = M_best.predict_proba(x.reshape(-1, 1))
+        pdf = np.exp(logprob)
+        pdf_individual = responsibilities * pdf[:, np.newaxis]
+
+        ax.hist(X, 30, density=True, histtype='stepfilled', alpha=0.4)
+        ax.plot(x, pdf, '-k')
+        ax.plot(x, pdf_individual, '--k')
+        ax.text(0.04, 0.96, "Best-fit Mixture",
+                ha='left', va='top', transform=ax.transAxes)
+        ax.set_xlabel('$x$')
+        ax.set_ylabel('$p(x)$')
+
+        # # plot 2: AIC and BIC
+        # ax = fig.add_subplot(132)
+        # ax.plot(N, AIC, '-k', label='AIC')
+        # ax.plot(N, BIC, '--k', label='BIC')
+        # ax.set_xlabel('n. components')
+        # ax.set_ylabel('information criterion')
+        # ax.legend(loc=2)
+
+        # plot 3: posterior probabilities for each component
+        ax = fig.add_subplot(122)
+
+        p = responsibilities
+        p = p[:, (1, 0, 2)]  # rearrange order so the plot looks better
+        p = p.cumsum(1).T
+
+        ax.fill_between(x, 0, p[0], color='gray', alpha=0.3)
+        ax.fill_between(x, p[0], p[1], color='gray', alpha=0.5)
+        ax.fill_between(x, p[1], 1, color='gray', alpha=0.7)
+        # ax.set_xlim(-6, 6)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel('$x$')
+        ax.set_ylabel(r'$p({\rm class}|x)$')
+
+        ax.text(-5, 0.3, 'class 1', rotation='vertical')
+        ax.text(0, 0.5, 'class 2', rotation='vertical')
+        ax.text(3, 0.3, 'class 3', rotation='vertical')
+
+        plt.show()
         # subtract away background noise level
         g_mask = g[:, :] < (bkgd_grn.astype("uint8") + 1)
         r_mask = r[:, :] < (bkgd_red.astype("uint8") + 1)
@@ -86,41 +170,28 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hists=False):
         # signal.
         tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
         angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
-        # kernel = create_kernel(tube_width, tube_height, angle, plotting)
-        # blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
-        # blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
-        # _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
+        kernel = create_kernel(tube_width, tube_height, angle, plotting)
+        blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
+        blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
+        _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
-            if plt_hists:
-                plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-                plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-                plt.show()
-        # unstandardized_scores[i] = abs(maxVal)
+            # plt.hist(subimage.ravel(), 256, [0, 256], log=True)
+            # plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+            # plt.show()
+
+        unstandardized_scores[i] = abs(maxVal)
         # unstandardized_scores[i] = maxVal
-        hist, _ = np.histogram(subimage.ravel(), bins=[x for x in range(1, 255)])
-        # print(hist)
-        loghist = np.ceil((np.log(hist + 1)*100)).astype(int)
-        # print(log10hist)
-        logpdf = []
-        for i in range(0, len(loghist)):
-            logpdf.append([i]*loghist[i])
-        subimages_values.append(logpdf)
-        # subimages_values.append(subimage.ravel())
 
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
         plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
-
-    final_score = []
-    for i in range(0, len(subimages_values)):
-        _, p = stats.ks_2samp(subimages_values[i], subimages_values[-1])
-        final_score.append(p)
-    # final_score = [unstandardized_score / unstandardized_scores[-1]
-    #                for unstandardized_score in unstandardized_scores]
+    print(unstandardized_scores)
+    final_score = [unstandardized_score / unstandardized_scores[-1]
+                   for unstandardized_score in unstandardized_scores]
 
     f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
@@ -217,9 +288,9 @@ def applyClahetoRGB(bgr_imb):
     return final
 
 
-def run_analysis(file, tube_coords, threshold, plotting=False):
-    final_scores = getPredictions(file, tube_coords, plotting)
-    calls = [1 if x < threshold else 0 for x in final_scores]
+def run_analysis(file, tube_coords, threshold, plotting=False, plt_hist=False):
+    final_scores = getPredictions(file, tube_coords, plotting, plt_hist)
+    calls = [1 if x > threshold else 0 for x in final_scores]
     print(json.dumps({"final_scores": final_scores, "calls": calls}))
 
 
@@ -229,20 +300,22 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = .05
+    threshold = 2.65
 
-    if args.image_file is None:
+    train_threshold = False
+    if train_threshold:
+        thresholds = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+    elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            tube_coords = None
-            # if "NTCs" not in file:
-            #     continue
+            if "4cb" not in file:
+                continue
             print(file)
-
+            tube_coords = None
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
