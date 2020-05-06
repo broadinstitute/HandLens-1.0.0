@@ -2,6 +2,8 @@ from __future__ import division
 import cv2
 import numpy as np
 import argparse
+import scipy
+import scipy.stats
 from skimage.draw import line, polygon
 from sklearn.mixture import GaussianMixture
 import glob, os
@@ -41,7 +43,8 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     unstandardized_scores = [None] * strip_count
     tmp = image.copy()
     tmp_filtered = image.copy()
-
+    sig_dists = []
+    sig_coeffs = []
     for i in range(0, strip_count):
 
         tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
@@ -71,6 +74,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         hist_end = 255
         hist_bg, edges_bg = np.histogram(g_bg.ravel(), hist_end - hist_begin,
                                          [hist_begin, hist_end])
+        edges_bg = (edges_bg[:-1] + edges_bg[1:]) / 2
         # Sometimes we see bright blue/white artifacts in the image. We have to remove them.
         b_bg, g_bg, r_bg, blue_mask_bg = remove_bright_blues(b_bg, g_bg, r_bg, bkgd_blu, tube_width)
         # blue channel is all noise, so get rid of it:
@@ -114,7 +118,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # g[blue_mask] = int(np.mean(g[cc, rr]))
         # shift green channel to match with background distribution:
         green_shift = np.argmax(hist_g) - np.argmax(hist_bg)
-        print("green_shift: {}".format(green_shift))
+        # print("green_shift: {}".format(green_shift))
         # if green_shift > 0:
         #     g_mask = g[:, :] <= (green_shift.astype("uint8"))
         #     g -= green_shift.astype("uint8")
@@ -163,21 +167,41 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
+
         edges_sig -= green_shift
-        edges_sig = (edges_sig[:-1] + edges_sig[1:]) / 2
+        edges_sig = edges_sig[0:-1]
         sig_peak = np.max(hist_sig)
-        peak_loc = edges_sig[np.argmax(hist_sig)]
+        signal_peak_loc = edges_sig[np.argmax(hist_sig)]
         # Make sure background signal within subimage is callibrated to local background signal
         # Fit gaussian for in-tube signal:
-        p0 = sig_peak, peak_loc, 4
+        p0 = sig_peak, signal_peak_loc, 4
         coeff, var_matrix = curve_fit(gauss, edges_sig, hist_sig, p0=p0)
         # Get the fitted curve
-        hist_fit = gauss(edges_sig, *coeff)
+        hist_signal_fit = gauss(edges_sig, *coeff)
         # plt.plot(edges_sig, hist_sig, label='Test data')
-        # plt.plot(edges_sig, hist_fit, label='Fitted data')
+        # plt.plot(edges_sig, hist_signal_fit, label='Fitted data')
         # Finally, lets get the fitting parameters, i.e. the mean and standard deviation:
         print('Fitted mean = ', coeff[1])
         print('Fitted standard deviation = ', coeff[2])
+        bg_peak = np.max(hist_bg)
+        bg_peak_loc = edges_bg[np.argmax(hist_bg)]
+        p_bg = bg_peak, bg_peak_loc, 4
+        coeff_bg, var_matrix_bg = curve_fit(gauss, edges_bg, hist_bg, p0=p_bg)
+        # print('Fitted mean = ', coeff_bg[1])
+        # print('Fitted standard deviation = ', coeff_bg[2])
+        # Get the fitted curve
+        hist_bg_fit = gauss(edges_bg, *coeff_bg)
+        sig_dist = []
+        for j in range(0, len(hist_bg)):
+            sig_dist.extend([edges_sig[j]] * hist_sig[j])
+        sig_dist -= coeff_bg[1]
+        sig_dists.append(sig_dist)
+        sig_coeffs.append(sig_coeffs)
+        # print(scipy.stats.ttest_ind(subimage_bg[cc_bg, rr_bg, 1], sig_dist, equal_var=False))
+        # plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40)
+        # plt.hist(sig_dist, bins=40)
+        # plt.show()
+
         # plt.show()
 
         if plotting:
@@ -189,21 +213,22 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                 ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
                          log=True, label="subimage")
                 ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                         log=True,  label="background")
+                         log=True, label="background")
 
                 # get hist of potential signal elements
                 ax1.plot(edges_sig, hist_sig, label="signal")
                 ax1.set_title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-                ax1.plot(edges_sig, hist_fit, '--', label='signal fit')
-                ax1.set_ylim([0.5, np.max(hist_bg)*2])
+                ax1.plot(edges_sig, hist_signal_fit, '--', label='signal fit')
+                ax1.set_ylim([0.5, np.max(hist_bg) * 2])
                 plt.legend()
                 plt.show()
 
-        unstandardized_scores[i] = abs(maxVal - bkgd_grn.astype("uint8"))
-        print("maxVal: {}".format(maxVal))
-        print("bkgd_grn: {}".format(bkgd_grn.astype("uint8")))
-        print("unstandardized_scores: {}".format(unstandardized_scores[i]))
-        print()
+        unstandardized_scores[i] = coeff[1] - coeff_bg[1]
+        # unstandardized_scores[i] = abs(maxVal - bkgd_grn.astype("uint8"))
+        # print("maxVal: {}".format(maxVal))
+        # print("bkgd_grn: {}".format(bkgd_grn.astype("uint8")))
+        # print("unstandardized_scores: {}".format(unstandardized_scores[i]))
+        # print()
         # unstandardized_scores[i] = maxVal
 
     if plotting:
@@ -212,6 +237,15 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
     print(unstandardized_scores)
+    t_scores = []
+    for i in range(0, len(sig_dists)):
+        _, p_val = scipy.stats.ttest_ind(sig_dists[i], sig_dists[-1], equal_var=False)
+        t_scores.append(p_val)
+        plt.hist(sig_dists[i], bins=40)
+        plt.hist(sig_dists[-1], bins=40)
+        plt.show()
+
+    print("t_scores: {}".format(t_scores))
     final_score = [unstandardized_score / unstandardized_scores[-1]
                    for unstandardized_score in unstandardized_scores]
 
