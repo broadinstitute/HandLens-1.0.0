@@ -181,8 +181,8 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # plt.plot(edges_sig, hist_sig, label='Test data')
         # plt.plot(edges_sig, hist_signal_fit, label='Fitted data')
         # Finally, lets get the fitting parameters, i.e. the mean and standard deviation:
-        print('Fitted mean = ', coeff[1])
-        print('Fitted standard deviation = ', coeff[2])
+        # print('Fitted mean = ', coeff[1])
+        # print('Fitted standard deviation = ', coeff[2])
         bg_peak = np.max(hist_bg)
         bg_peak_loc = edges_bg[np.argmax(hist_bg)]
         p_bg = bg_peak, bg_peak_loc, 4
@@ -196,7 +196,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
             sig_dist.extend([edges_sig[j]] * hist_sig[j])
         sig_dist -= coeff_bg[1]
         sig_dists.append(sig_dist)
-        sig_coeffs.append(sig_coeffs)
+        sig_coeffs.append(coeff)
         # print(scipy.stats.ttest_ind(subimage_bg[cc_bg, rr_bg, 1], sig_dist, equal_var=False))
         # plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40)
         # plt.hist(sig_dist, bins=40)
@@ -208,13 +208,12 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
             tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
-            fig, ax1 = plt.subplots()
             if plt_hist:
+                fig, ax1 = plt.subplots()
                 ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
                          log=True, label="subimage")
                 ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
                          log=True, label="background")
-
                 # get hist of potential signal elements
                 ax1.plot(edges_sig, hist_sig, label="signal")
                 ax1.set_title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
@@ -241,13 +240,16 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     for i in range(0, len(sig_dists)):
         _, p_val = scipy.stats.ttest_ind(sig_dists[i], sig_dists[-1], equal_var=False)
         t_scores.append(p_val)
-        plt.hist(sig_dists[i], bins=40)
-        plt.hist(sig_dists[-1], bins=40)
-        plt.show()
+        if plotting and plt_hist:
+            plt.hist(sig_dists[i], bins=40)
+            plt.hist(sig_dists[-1], bins=40)
+            plt.show()
 
     print("t_scores: {}".format(t_scores))
-    final_score = [unstandardized_score / unstandardized_scores[-1]
-                   for unstandardized_score in unstandardized_scores]
+    # final_score = [unstandardized_score / unstandardized_scores[-1]
+    #                for unstandardized_score in unstandardized_scores]
+    final_score = list((unstandardized_score - unstandardized_scores[-1]) / sig_coeffs[-1][2]
+                       for unstandardized_score in unstandardized_scores)
 
     f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
@@ -375,7 +377,7 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 2.65
+    threshold = 1
 
     train_threshold = False
     if train_threshold:
@@ -383,14 +385,14 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "30" not in file:
+            if "33b" not in file:
                 continue
             print(file)
             tube_coords = None
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
