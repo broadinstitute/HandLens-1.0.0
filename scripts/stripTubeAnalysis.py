@@ -10,6 +10,7 @@ import imutils
 import matplotlib.pyplot as plt
 import itertools
 import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 import matplotlib as mpl
 from scipy import linalg
 
@@ -21,16 +22,17 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     f.write(tube_coords_json)
     f.close()
     im_lower_dim = min(image.shape[0], image.shape[1])
-    # blur_size = np.round(im_lower_dim / 500)
-    # blur_size = int(blur_size if blur_size % 2 == 1 else blur_size + 1)
-    # cv2.GaussianBlur(image, (blur_size, blur_size),
-    #                  cv2.BORDER_DEFAULT)
+    blur_size = np.round(im_lower_dim / 500)
+    blur_size = int(blur_size if blur_size % 2 == 1 else blur_size + 1)
+    cv2.GaussianBlur(image, (blur_size, blur_size),
+                     cv2.BORDER_DEFAULT)
     # resize large images
     resize_factor = 1
     if im_lower_dim > 1000:
         resize_factor = 1000 / im_lower_dim
         image = cv2.resize(image, None, fx=resize_factor, fy=resize_factor,
                            interpolation=cv2.INTER_AREA)
+    i = 1
     tube_coords = np.asarray(tube_coords) * resize_factor
     strip_count = len(tube_coords) - 1
     # Filter the image to enhance various features
@@ -53,20 +55,33 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         box[3] = np.asarray(
             [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
-        rr, cc = polygon(box[:, 0], box[:, 1])
-        mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
-        mask[cc, rr] = 1
-        subimage2 = cv2.bitwise_and(image, image, mask=mask)
-        # subimage2[:, :, 0] = np.zeros([subimage2.shape[0], subimage2.shape[1]])
-        bkgd_red = np.median(subimage2[cc, rr, 2])  # (np.sum(subimage2[:, :, 2])) / np.sum(mask)
-        bkgd_grn = np.median(subimage2[cc, rr, 1])  # (np.sum(subimage2[:, :, 1])) / np.sum(mask)
-        bkgd_blu = np.median(subimage2[cc, rr, 0])  # (np.sum(subimage2[:, :, 0])) / np.sum(mask)
+        rr_bg, cc_bg = polygon(box[:, 0], box[:, 1])
+        mask_background = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
+        mask_background[cc_bg, rr_bg] = 1
+        subimage_bg = cv2.bitwise_and(image, image, mask=mask_background)
+        # subimage_bg[:, :, 0] = np.zeros([subimage_bg.shape[0], subimage_bg.shape[1]])
+        bkgd_red = np.median(
+            subimage_bg[cc_bg, rr_bg, 2])  # (np.sum(subimage_bg[:, :, 2])) / np.sum(mask)
+        bkgd_grn = np.median(
+            subimage_bg[cc_bg, rr_bg, 1])  # (np.sum(subimage_bg[:, :, 1])) / np.sum(mask)
+        bkgd_blu = np.median(
+            subimage_bg[cc_bg, rr_bg, 0])  # (np.sum(subimage_bg[:, :, 0])) / np.sum(mask)
+        b_bg, g_bg, r_bg = cv2.split(subimage_bg)
+        hist_begin = 1
+        hist_end = 255
+        hist_bg, edges_bg = np.histogram(g_bg.ravel(), hist_end - hist_begin,
+                                         [hist_begin, hist_end])
+        # Sometimes we see bright blue/white artifacts in the image. We have to remove them.
+        b_bg, g_bg, r_bg, blue_mask_bg = remove_bright_blues(b_bg, g_bg, r_bg, bkgd_blu, tube_width)
+        # blue channel is all noise, so get rid of it:
+        b_bg[:, :] = np.zeros([b_bg.shape[0], b_bg.shape[1]])
+        # red channel is mostly UTM, so get rid of it:
+        r_bg[:, :] = np.zeros([r_bg.shape[0], r_bg.shape[1]])
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (255, 0, 0), 2)
-        # In theory, tlx and brx values don't need to be arrays. However, when we add support for
-        # rotated boxes, we will need array support anyways.
-        # for plottindasdg purposes, define the 4 corners of this tube's enclosing area.
+
+        # now, define a subimage for the signal in the tube
         box = np.zeros((5, 2))
         box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top left
         box[1] = np.asarray([tube_coords[i][2], tube_coords[i][3]])  # top right
@@ -78,22 +93,39 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         mask[cc, rr] = 1
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
-        blue_cutoff = 100
         b, g, r = cv2.split(subimage)
-        blue_mask = b[:, :] > blue_cutoff
-        g[blue_mask] = 0
-        r[blue_mask] = 0
+
+        # Sometimes we see bright blue/white artifacts in the image. We have to remove them.
+        b, g, r, blue_mask = remove_bright_blues(b, g, r, bkgd_blu, tube_width)
         # blue channel is all noise, so get rid of it:
         b[:, :] = np.zeros([b.shape[0], b.shape[1]])
+        # red channel is mostly UTM, so get rid of it:
+        r[:, :] = np.zeros([b.shape[0], b.shape[1]])
+        subimage = cv2.merge([b, g, r])
+
         # subtract away background noise level
-        g_mask = g[:, :] < (bkgd_grn.astype("uint8") + 1)
-        r_mask = r[:, :] < (bkgd_red.astype("uint8") + 1)
-        g -= bkgd_grn.astype("uint8")
-        r -= bkgd_red.astype("uint8")
-        g[g_mask] = 0
-        r[r_mask] = 0
-        g[blue_mask] = np.mean(g[cc, rr])
-        r[blue_mask] = np.mean(r[cc, rr])
+        # g_mask = g[:, :] < (bkgd_grn.astype("uint8") + 1)
+        # r_mask = r[:, :] < (bkgd_red.astype("uint8") + 1)
+        # g -= bkgd_grn.astype("uint8")
+        # r -= bkgd_red.astype("uint8")
+        # g[g_mask] = 0
+        # r[r_mask] = 0
+        hist_g, edges_g = np.histogram(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end])
+        # g[blue_mask] = int(np.mean(g[cc, rr]))
+        # shift green channel to match with background distribution:
+        green_shift = np.argmax(hist_g) - np.argmax(hist_bg)
+        print("green_shift: {}".format(green_shift))
+        if green_shift > 0:
+            g_mask = g[:, :] <= (green_shift.astype("uint8"))
+            g -= green_shift.astype("uint8")
+            g[g_mask] = 0
+        else:
+            green_shift *= -1
+            g_mask = g[:, :] > 255 - (green_shift.astype("uint8"))
+            g += green_shift.astype("uint8")
+            g[g_mask] = 255
+
+        # r[blue_mask] = int(np.mean(r[cc, rr])) # red channel is mostly UTM, so get rid of it.
         subimage = cv2.merge([b, g, r])
         # We want to get signal from the part of the tube which contains liquid, and not any other
         # background signal. As such, we model the bottom of the tube as a trapezoid and create a
@@ -102,17 +134,49 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         tube_height = int(((box[3][0] - box[0][0]) ** 2 + (box[3][1] - box[0][1]) ** 2) ** (1 / 2))
         angle = np.rad2deg(np.arctan2(box[0][1] - box[1][1], box[1][0] - box[0][0]))
         kernel = create_kernel(tube_width, tube_height, angle, plotting)
-        blurs_green = cv2.filter2D(subimage[:, :, 1], -1, kernel)
+        blurs_green = cv2.filter2D(subimage[:, :, 1], cv2.CV_32F, kernel, anchor=(0, 0))
         blurs_red = cv2.filter2D(subimage[:, :, 2], -1, kernel)
-        _, maxVal, _, maxLoc = cv2.minMaxLoc(blurs_green + blurs_red)
+        _, maxVal, _, maxLoc = cv2.minMaxLoc(
+            blurs_green)  # + blurs_red) # maxLoc is (x, y) == (col, row)
+        max_row = maxLoc[1]
+        max_col = maxLoc[0]
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
-            # plt.hist(subimage.ravel(), 256, [0, 256], log=True)
-            # plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-            # plt.show()
+            tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
+            if plt_hist:
+                plt.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True, color="g")
+                plt.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True, color="r")
+                # get hist of just the bright region
+                elems = []
+                for m in range(0, kernel.shape[0]):
+                    if max_row + m >= g.shape[0]:
+                        print("wtf 1: {}".format(max_row + m))
+                        break
+                    for n in range(0, kernel.shape[1]):
+                        if max_col + n >= g.shape[1]:
+                            print("wtf 2: {}".format(max_col + m))
 
-        unstandardized_scores[i] = abs(maxVal)
+                            break
+                        if kernel[m, n] != 0:
+                            elems.append(g[max_row + m, max_col + n])
+                            # visualize where the kernel is placed
+                            tmp[max_row + m, max_col + n, 0] = 255
+                            tmp[max_row + m, max_col + n, 1] = 255
+                            tmp[max_row + m, max_col + n, 2] = 255
+
+                plt.hist(elems, 254, [1, 255], log=True, color="b")
+                plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+                plt.legend(["subimage", "background", "signal"])
+                plt.show()
+
+        unstandardized_scores[i] = abs(maxVal - bkgd_grn.astype("uint8"))
+        print("maxVal: {}".format(maxVal))
+        print("bkgd_grn: {}".format(bkgd_grn.astype("uint8")))
+        print("unstandardized_scores: {}".format(unstandardized_scores[i]))
+        print()
         # unstandardized_scores[i] = maxVal
 
     if plotting:
@@ -131,6 +195,20 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     return final_score
 
 
+def remove_bright_blues(b, g, r, bkgd_blu, tube_width):
+    blue_cutoff = 2 * bkgd_blu
+    blue_mask = b[:, :] > blue_cutoff
+    pixel_threshold = (tube_width / 10) ** 2
+    if np.sum(blue_mask) > pixel_threshold:
+        # be more stringent if we think we've detected a bright blue/white artifact
+        blue_cutoff = bkgd_blu * 1.5
+        blue_mask = b[:, :] > blue_cutoff
+    g[blue_mask] = 0
+    r[blue_mask] = 0
+
+    return b, g, r, blue_mask
+
+
 def create_kernel(tube_width, tube_height, angle, plotting):
     """
     :return: a trapezoidal kernel
@@ -139,9 +217,9 @@ def create_kernel(tube_width, tube_height, angle, plotting):
     kernel_width = tube_width
     kernel_height = tube_height
     kernel = np.zeros((kernel_height, kernel_width), np.float32)
-    trap_height_large = int(38 * tube_height / 75)
-    trap_height_small = int(18 * tube_height / 75)
-    trap_length = int(55 * tube_width / 70)
+    trap_height_large = int(24 * tube_height / 75)
+    trap_height_small = int(11 * tube_height / 75)
+    trap_length = int(33 * tube_width / 75)
     trapezoid = np.zeros((4, 2))
     trapezoid[0] = np.asarray([kernel_height / 2 - trap_height_small / 2, 0])  # top left
     trapezoid[1] = np.asarray([kernel_height / 2 - trap_height_large / 2, trap_length])  # top right
@@ -219,7 +297,7 @@ def applyClahetoRGB(bgr_imb):
     return final
 
 
-def run_analysis(file, tube_coords, threshold, plotting=False, plt_hist=False):
+def run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False):
     final_scores = getPredictions(file, tube_coords, plotting, plt_hist)
     calls = [1 if x > threshold else 0 for x in final_scores]
     print(json.dumps({"final_scores": final_scores, "calls": calls}))
@@ -239,7 +317,7 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "4cb" not in file:
+            if "min" not in file:
                 continue
             print(file)
             tube_coords = None
