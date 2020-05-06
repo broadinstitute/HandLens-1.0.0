@@ -115,15 +115,15 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # shift green channel to match with background distribution:
         green_shift = np.argmax(hist_g) - np.argmax(hist_bg)
         print("green_shift: {}".format(green_shift))
-        if green_shift > 0:
-            g_mask = g[:, :] <= (green_shift.astype("uint8"))
-            g -= green_shift.astype("uint8")
-            g[g_mask] = 0
-        else:
-            green_shift *= -1
-            g_mask = g[:, :] > 255 - (green_shift.astype("uint8"))
-            g += green_shift.astype("uint8")
-            g[g_mask] = 255
+        # if green_shift > 0:
+        #     g_mask = g[:, :] <= (green_shift.astype("uint8"))
+        #     g -= green_shift.astype("uint8")
+        #     g[g_mask] = 0
+        # else:
+        #     green_shift *= -1
+        #     g_mask = g[:, :] > 255 - (green_shift.astype("uint8"))
+        #     g += green_shift.astype("uint8")
+        #     g[g_mask] = 255
 
         # r[blue_mask] = int(np.mean(r[cc, rr])) # red channel is mostly UTM, so get rid of it.
         subimage = cv2.merge([b, g, r])
@@ -140,36 +140,63 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
             blurs_green)  # + blurs_red) # maxLoc is (x, y) == (col, row)
         max_row = maxLoc[1]
         max_col = maxLoc[0]
+
+        # get list of pixels identified as the tube's signal.
+        signal_pxs = []
+        for m in range(0, kernel.shape[0]):
+            if max_row + m >= g.shape[0]:
+                print("Error: please place more space between the strips and the edge of"
+                      " the captured image")
+                break
+            for n in range(0, kernel.shape[1]):
+                if max_col + n >= g.shape[1]:
+                    print("Error: please place more space between the strips and the edge of"
+                          " the captured image")
+                    break
+                if kernel[m, n] != 0:
+                    signal_pxs.append(g[max_row + m, max_col + n])
+                    # if plotting:
+                    #     # visualize where the kernel is placed
+                    #     tmp[max_row + m, max_col + n, 0] = 255
+                    #     tmp[max_row + m, max_col + n, 1] = 255
+                    #     tmp[max_row + m, max_col + n, 2] = 255
+
+        hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
+                                           [hist_begin, hist_end])
+        edges_sig -= green_shift
+        edges_sig = (edges_sig[:-1] + edges_sig[1:]) / 2
+        sig_peak = np.max(hist_sig)
+        peak_loc = edges_sig[np.argmax(hist_sig)]
+        # Make sure background signal within subimage is callibrated to local background signal
+        # Fit gaussian for in-tube signal:
+        p0 = sig_peak, peak_loc, 4
+        coeff, var_matrix = curve_fit(gauss, edges_sig, hist_sig, p0=p0)
+        # Get the fitted curve
+        hist_fit = gauss(edges_sig, *coeff)
+        # plt.plot(edges_sig, hist_sig, label='Test data')
+        # plt.plot(edges_sig, hist_fit, label='Fitted data')
+        # Finally, lets get the fitting parameters, i.e. the mean and standard deviation:
+        print('Fitted mean = ', coeff[1])
+        print('Fitted standard deviation = ', coeff[2])
+        # plt.show()
+
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                    0, (0, 0, 255), 2)
             tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
+            fig, ax1 = plt.subplots()
             if plt_hist:
-                plt.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                         log=True, color="g")
-                plt.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                         log=True, color="r")
-                # get hist of just the bright region
-                elems = []
-                for m in range(0, kernel.shape[0]):
-                    if max_row + m >= g.shape[0]:
-                        print("wtf 1: {}".format(max_row + m))
-                        break
-                    for n in range(0, kernel.shape[1]):
-                        if max_col + n >= g.shape[1]:
-                            print("wtf 2: {}".format(max_col + m))
+                ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True, label="subimage")
+                ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True,  label="background")
 
-                            break
-                        if kernel[m, n] != 0:
-                            elems.append(g[max_row + m, max_col + n])
-                            # visualize where the kernel is placed
-                            tmp[max_row + m, max_col + n, 0] = 255
-                            tmp[max_row + m, max_col + n, 1] = 255
-                            tmp[max_row + m, max_col + n, 2] = 255
-
-                plt.hist(elems, 254, [1, 255], log=True, color="b")
-                plt.title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-                plt.legend(["subimage", "background", "signal"])
+                # get hist of potential signal elements
+                ax1.plot(edges_sig, hist_sig, label="signal")
+                ax1.set_title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+                ax1.plot(edges_sig, hist_fit, '--', label='signal fit')
+                ax1.set_ylim([0.5, np.max(hist_bg)*2])
+                plt.legend()
                 plt.show()
 
         unstandardized_scores[i] = abs(maxVal - bkgd_grn.astype("uint8"))
@@ -193,6 +220,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     f.close()
 
     return final_score
+
+
+def gauss(x, *p):
+    A, mu, sigma = p
+    return A * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2))
 
 
 def remove_bright_blues(b, g, r, bkgd_blu, tube_width):
@@ -317,7 +349,7 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "min" not in file:
+            if "30" not in file:
                 continue
             print(file)
             tube_coords = None
