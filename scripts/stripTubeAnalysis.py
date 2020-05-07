@@ -57,9 +57,9 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
         box[2] = np.asarray(extend_line(tube_coords[i + 1][2], tube_coords[i + 1][3],
                                         tube_coords[i + 1][0], tube_coords[i + 1][1],
-                                        tube_width / 2))  # bottom left
+                                        tube_width / 2.5))  # bottom left
         box[3] = np.asarray(extend_line(tube_coords[i][2], tube_coords[i][3], tube_coords[i][0],
-                                        tube_coords[i][1], tube_width / 2))  # top left
+                                        tube_coords[i][1], tube_width / 2.5))  # top left
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
         rr_bg, cc_bg = polygon(box[:, 0], box[:, 1])
         mask_background = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
@@ -403,8 +403,8 @@ def main():
         thresholds = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
     elif args.image_file is None:
         for file in glob.glob(
-                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "d1f3" not in file:  # and "mins" not in file:
+                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\uploads\*jpg'):
+            if "Clinical" not in file:  # and "mins" not in file:
                 continue
             print(file)
             tube_coords = None
