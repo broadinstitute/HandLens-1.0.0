@@ -41,6 +41,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
 
     unstandardized_scores = [None] * strip_count
+    unstandardized_scores_medians = [None] * strip_count
     tmp = image.copy()
     tmp_filtered = image.copy()
     sig_dists = []
@@ -198,11 +199,14 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         sig_dists.append(sig_dist)
         sig_coeffs.append(coeff)
         # print(scipy.stats.ttest_ind(subimage_bg[cc_bg, rr_bg, 1], sig_dist, equal_var=False))
-        # plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40)
-        # plt.hist(sig_dist, bins=40)
-        # plt.show()
+        if plotting and plt_hist:
+            plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40, label="background")
+            plt.hist(sig_dist, bins=40, label="signal")
+            plt.legend()
+            plt.title("tube {}".format(i))
+            plt.show()
 
-        # plt.show()
+            plt.show()
 
         if plotting:
             tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
@@ -222,7 +226,9 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                 plt.legend()
                 plt.show()
 
-        unstandardized_scores[i] = coeff[1] - coeff_bg[1]
+        unstandardized_scores[i] = coeff[1] - coeff_bg[1]  # np.median(signal_pxs) - coeff_bg[1]
+        unstandardized_scores_medians[i] = np.median(signal_pxs) - coeff_bg[1]
+
         # unstandardized_scores[i] = abs(maxVal - bkgd_grn.astype("uint8"))
         # print("maxVal: {}".format(maxVal))
         # print("bkgd_grn: {}".format(bkgd_grn.astype("uint8")))
@@ -235,27 +241,31 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
         plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
-    print(unstandardized_scores)
+    # print("unstandardized_scores: {}".format(unstandardized_scores))
     t_scores = []
     for i in range(0, len(sig_dists)):
         _, p_val = scipy.stats.ttest_ind(sig_dists[i], sig_dists[-1], equal_var=False)
         t_scores.append(p_val)
         if plotting and plt_hist:
-            plt.hist(sig_dists[i], bins=40)
-            plt.hist(sig_dists[-1], bins=40)
+            plt.hist(sig_dists[i], bins=40, label="tube {} signal".format(i))
+            plt.hist(sig_dists[-1], bins=40, label="control signal")
+            plt.legend()
             plt.show()
 
-    print("t_scores: {}".format(t_scores))
+    # print("t_scores: {}".format(t_scores))
+
     # final_score = [unstandardized_score / unstandardized_scores[-1]
     #                for unstandardized_score in unstandardized_scores]
     final_score = list((unstandardized_score - unstandardized_scores[-1]) / sig_coeffs[-1][2]
                        for unstandardized_score in unstandardized_scores)
-
+    final_score_medians = list(
+        (unstandardized_score_median - unstandardized_scores[-1]) / sig_coeffs[-1][2]
+        for unstandardized_score_median in unstandardized_scores_medians)
     f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
     f.close()
 
-    return final_score
+    return final_score, final_score_medians
 
 
 def gauss(x, *p):
@@ -366,9 +376,9 @@ def applyClahetoRGB(bgr_imb):
 
 
 def run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False):
-    final_scores = getPredictions(file, tube_coords, plotting, plt_hist)
-    calls = [1 if x > threshold else 0 for x in final_scores]
-    print(json.dumps({"final_scores": final_scores, "calls": calls}))
+    fs, fs_m = getPredictions(file, tube_coords, plotting, plt_hist)
+    calls = [1 if fs[i] > threshold and fs_m[i] > threshold else 0 for i in range(0, len(fs))]
+    print(json.dumps({"calls": calls, "final_scores": fs, "final_scores_median": fs_m}))
 
 
 def main():
@@ -377,7 +387,7 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 1
+    threshold = 1.0
 
     train_threshold = False
     if train_threshold:
@@ -385,14 +395,14 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "33b" not in file:
+            if "d1f3" not in file: # and "mins" not in file:
                 continue
             print(file)
             tube_coords = None
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
