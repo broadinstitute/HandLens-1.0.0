@@ -121,8 +121,9 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # r[r_mask] = 0
         hist_g, edges_g = np.histogram(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end])
         # g[blue_mask] = int(np.mean(g[cc, rr]))
-        # shift green channel to match with background distribution:
-        green_shift = np.argmax(hist_g) - np.argmax(hist_bg)
+        # # shift green channel to match with background distribution:
+        # green_shift = np.argmax(hist_g) - np.argmax(hist_bg)
+        green_shift = 0
         # print("green_shift: {}".format(green_shift))
         # if green_shift > 0:
         #     g_mask = g[:, :] <= (green_shift.astype("uint8"))
@@ -164,11 +165,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                     break
                 if kernel[m, n] != 0:
                     signal_pxs.append(g[max_row + m, max_col + n])
-                    if plotting:
-                        # visualize where the kernel is placed
-                        tmp[max_row + m, max_col + n, 0] = 255
-                        tmp[max_row + m, max_col + n, 1] = 255
-                        tmp[max_row + m, max_col + n, 2] = 255
+                    # if plotting:
+                    #     # visualize where the kernel is placed
+                    #     tmp[max_row + m, max_col + n, 0] = 255
+                    #     tmp[max_row + m, max_col + n, 1] = 255
+                    #     tmp[max_row + m, max_col + n, 2] = 255
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
@@ -260,18 +261,13 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         plt.title('{}'.format(image_file.split('\\')[-1]))
         plt.show()
     # print("unstandardized_scores: {}".format(unstandardized_scores))
-    t_scores = []
     for i in range(0, len(sig_dists)):
-        _, p_val = scipy.stats.ttest_ind(sig_dists[i], sig_dists[-1], equal_var=False)
-        t_scores.append(p_val)
-        if plotting and plt_hist:
-            plt.hist(sig_dists[i], bins=40, label="tube {} signal".format(i))
-            plt.hist(sig_dists[-1], bins=40, label="control signal")
-            plt.legend()
-            plt.show()
-
-    # print("t_scores: {}".format(t_scores))
-
+        continue
+        # if plotting and plt_hist:
+        #     plt.hist(sig_dists[i], bins=40, label="tube {} signal".format(i))
+        #     plt.hist(sig_dists[-1], bins=40, label="control signal")
+        #     plt.legend()
+        #     plt.show()
     # final_score = [unstandardized_score / unstandardized_scores[-1]
     #                for unstandardized_score in unstandardized_scores]
     final_score = list((unstandardized_score - unstandardized_scores[-1]) / sig_coeffs[-1][2]
@@ -425,14 +421,16 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            # if "debug" not in file:  # and "mins" not in file:
-            #     continue
+            # files = ["33b", "d1f3", "g.jpg-2020-05-07T170653394Z"]
+            files = ["33b"]
+            if not any([f in file for f in files]):  # and "mins" not in file:
+                continue
             print(file)
             tube_coords = None
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
+            run_analysis(file, tube_coords, threshold, plotting=False, plt_hist=False)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
