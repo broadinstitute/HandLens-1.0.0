@@ -47,6 +47,8 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     tmp_filtered = image.copy()
     sig_dists = []
     sig_coeffs = []
+
+    # iterate over the tubes
     for i in range(0, strip_count):
 
         tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
@@ -162,11 +164,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                     break
                 if kernel[m, n] != 0:
                     signal_pxs.append(g[max_row + m, max_col + n])
-                    # if plotting:
-                    #     # visualize where the kernel is placed
-                    #     tmp[max_row + m, max_col + n, 0] = 255
-                    #     tmp[max_row + m, max_col + n, 1] = 255
-                    #     tmp[max_row + m, max_col + n, 2] = 255
+                    if plotting:
+                        # visualize where the kernel is placed
+                        tmp[max_row + m, max_col + n, 0] = 255
+                        tmp[max_row + m, max_col + n, 1] = 255
+                        tmp[max_row + m, max_col + n, 2] = 255
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
@@ -178,7 +180,16 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # Make sure background signal within subimage is callibrated to local background signal
         # Fit gaussian for in-tube signal:
         p0 = sig_peak, signal_peak_loc, 4
-        coeff, var_matrix = curve_fit(gauss, edges_sig, hist_sig, p0=p0)
+        coeff = []
+        var_matrix = []
+        sig_mean = np.mean(signal_pxs)
+        # if the image is really bright, it saturates and our curve fitting fails because the center
+        # of the gaussian is above 255. In this case, we just set the peak equal to the mean, and
+        # based on previous manual inspection of high signals, sd to 20
+        if sig_mean > 215:
+            coeff = [sig_peak, sig_mean, 20]
+        else:
+            coeff, var_matrix = curve_fit(gauss, edges_sig, hist_sig, p0=p0)
         # Get the fitted curve
         hist_signal_fit = gauss(edges_sig, *coeff)
         # plt.plot(edges_sig, hist_sig, label='Test data')
@@ -200,7 +211,6 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         sig_dist -= coeff_bg[1]
         sig_dists.append(sig_dist)
         sig_coeffs.append(coeff)
-        # print(scipy.stats.ttest_ind(subimage_bg[cc_bg, rr_bg, 1], sig_dist, equal_var=False))
         if plotting and plt_hist:
             plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40, label="background")
             plt.hist(sig_dist, bins=40, label="signal")
@@ -211,8 +221,14 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
             plt.show()
 
         if plotting:
-            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-                                   0, (0, 0, 255), 2)
+            if i == strip_count - 1:
+                tmp = cv2.drawContours(tmp,
+                                       [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                       0, (0, 255, 255), 2)
+            else:
+                tmp = cv2.drawContours(tmp,
+                                       [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                       0, (0, 0, 255), 2)
             tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
             if plt_hist:
                 fig, ax1 = plt.subplots()
@@ -283,8 +299,13 @@ def gauss(x, *p):
 
 
 def remove_bright_blues(b, g, r, bkgd_blu, tube_width):
+    bf = b.astype(float) + .001
+    rf = r.astype(float) + .001
+    gf = g.astype(float) + .001
     blue_cutoff = 2 * bkgd_blu
-    blue_mask = b[:, :] > blue_cutoff
+    blue_mask1 = bf[:, :] > blue_cutoff
+    blue_mask2 = bf[:, :] / gf[:, :] > 0.8
+    blue_mask = np.logical_and(blue_mask1, blue_mask2)
     pixel_threshold = (tube_width / 10) ** 2
     if np.sum(blue_mask) > pixel_threshold:
         # be more stringent if we think we've detected a bright blue/white artifact
@@ -403,9 +424,9 @@ def main():
         thresholds = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
     elif args.image_file is None:
         for file in glob.glob(
-                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\uploads\*jpg'):
-            if "Clinical" not in file:  # and "mins" not in file:
-                continue
+                r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
+            # if "debug" not in file:  # and "mins" not in file:
+            #     continue
             print(file)
             tube_coords = None
             with open(file + ".coords.txt") as f:
