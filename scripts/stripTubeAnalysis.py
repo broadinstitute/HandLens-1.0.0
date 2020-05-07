@@ -4,6 +4,7 @@ import numpy as np
 import argparse
 import scipy
 import scipy.stats
+import math
 from skimage.draw import line, polygon
 from sklearn.mixture import GaussianMixture
 import glob, os
@@ -54,10 +55,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         box = np.zeros((5, 2))
         box[0] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
         box[1] = np.asarray([tube_coords[i + 1][0], tube_coords[i + 1][1]])  # bottom right
-        box[2] = np.asarray(
-            [tube_coords[i][0] - tube_width / 2, tube_coords[i + 1][1]])  # bottom left
-        box[3] = np.asarray(
-            [tube_coords[i + 1][0] - tube_width / 2, tube_coords[i][1]])  # top left
+        box[2] = np.asarray(extend_line(tube_coords[i + 1][2], tube_coords[i + 1][3],
+                                        tube_coords[i + 1][0], tube_coords[i + 1][1],
+                                        tube_width / 2))  # bottom left
+        box[3] = np.asarray(extend_line(tube_coords[i][2], tube_coords[i][3], tube_coords[i][0],
+                                        tube_coords[i][1], tube_width / 2))  # top left
         box[4] = np.asarray([tube_coords[i][0], tube_coords[i][1]])  # top right
         rr_bg, cc_bg = polygon(box[:, 0], box[:, 1])
         mask_background = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
@@ -268,6 +270,13 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     return final_score, final_score_medians
 
 
+def extend_line(x1, y1, x2, y2, length):
+    lenAB = math.sqrt(pow(x1 - x2, 2.0) + pow(y1 - y2, 2.0))
+    x = x2 + (x2 - x1) / lenAB * length
+    y = y2 + (y2 - y1) / lenAB * length
+    return x, y
+
+
 def gauss(x, *p):
     A, mu, sigma = p
     return A * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2))
@@ -395,14 +404,14 @@ def main():
     elif args.image_file is None:
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
-            if "d1f3" not in file: # and "mins" not in file:
+            if "d1f3" not in file:  # and "mins" not in file:
                 continue
             print(file)
             tube_coords = None
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
