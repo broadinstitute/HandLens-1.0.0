@@ -171,6 +171,17 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                     #     tmp[max_row + m, max_col + n, 1] = 255
                     #     tmp[max_row + m, max_col + n, 2] = 255
 
+        if plotting:
+            kernel_cp = kernel > 0
+            kernel_cp.dtype = 'uint8'
+            contours, hierarchy = cv2.findContours(kernel_cp, cv2.RETR_EXTERNAL,
+                                                       cv2.CHAIN_APPROX_NONE)
+            for z in range(0, len(contours[0])):
+                contours[0][z][0][0] += max_col
+                contours[0][z][0][1] += max_row
+
+            cv2.drawContours(tmp, contours, 0, (255, 255, 255), 2)
+
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
 
@@ -230,7 +241,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                 tmp = cv2.drawContours(tmp,
                                        [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
                                        0, (0, 0, 255), 2)
-            tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
+            # tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
             if plt_hist:
                 fig, ax1 = plt.subplots()
                 ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
@@ -430,7 +441,7 @@ def main():
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=False, plt_hist=False)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
