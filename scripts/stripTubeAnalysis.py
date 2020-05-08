@@ -16,7 +16,10 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import matplotlib as mpl
 from scipy import linalg
-
+import seaborn as sns
+sns.set()
+sns.set_palette("Paired")
+plt.rcParams["patch.force_edgecolor"] = False
 
 def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     image = cv2.imread(image_file)  # image is loaded as BGR
@@ -48,6 +51,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     sig_dists = []
     sig_coeffs = []
 
+    fig_subplot, axs = plt.subplots(2,2, sharex=True, sharey=True)
     # iterate over the tubes
     for i in range(0, strip_count):
 
@@ -165,22 +169,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                     break
                 if kernel[m, n] != 0:
                     signal_pxs.append(g[max_row + m, max_col + n])
-                    # if plotting:
+                    # if plotting and (i == 4 or i == 5):
                     #     # visualize where the kernel is placed
                     #     tmp[max_row + m, max_col + n, 0] = 255
                     #     tmp[max_row + m, max_col + n, 1] = 255
                     #     tmp[max_row + m, max_col + n, 2] = 255
-
-        if plotting:
-            kernel_cp = kernel > 0
-            kernel_cp.dtype = 'uint8'
-            contours, hierarchy = cv2.findContours(kernel_cp, cv2.RETR_EXTERNAL,
-                                                       cv2.CHAIN_APPROX_NONE)
-            for z in range(0, len(contours[0])):
-                contours[0][z][0][0] += max_col
-                contours[0][z][0][1] += max_row
-
-            cv2.drawContours(tmp, contours, 0, (255, 255, 255), 2)
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
@@ -223,14 +216,12 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         sig_dist -= coeff_bg[1]
         sig_dists.append(sig_dist)
         sig_coeffs.append(coeff)
-        if plotting and plt_hist:
-            plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40, label="background")
-            plt.hist(sig_dist, bins=40, label="signal")
-            plt.legend()
-            plt.title("tube {}".format(i))
-            plt.show()
-
-            plt.show()
+        # if plotting and plt_hist:
+        #     plt.hist(g_bg[cc_bg, rr_bg].ravel(), bins=40, label="background")
+        #     plt.hist(sig_dist, bins=40, label="signal")
+        #     plt.legend()
+        #     plt.title("tube {}".format(i))
+        #     plt.show()
 
         if plotting:
             if i == strip_count - 1:
@@ -243,18 +234,32 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                                        0, (0, 0, 255), 2)
             # tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
             if plt_hist:
-                fig, ax1 = plt.subplots()
-                ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                         log=True, label="subimage")
-                ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                         log=True, label="background")
-                # get hist of potential signal elements
-                ax1.plot(edges_sig, hist_sig, label="signal")
-                ax1.set_title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
-                ax1.plot(edges_sig, hist_signal_fit, '--', label='signal fit')
-                ax1.set_ylim([0.5, np.max(hist_bg) * 2])
-                plt.legend()
-                plt.show()
+                if i > 3:
+                    ax1 = None
+                    if i == 4:
+                        ax1 = axs[0,0]
+                    elif i == 5:
+                        ax1 = axs[0,1]
+                    elif i == 6:
+                        ax1 = axs[1, 0]
+                    else:
+                        ax1 = axs[1,1]
+                    # ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                    #          log=True, label="subimage")
+                    # sns.distplot(g_bg[cc_bg, rr_bg].ravel())
+                    ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                             log=True, label="background")
+                    ax1.plot(edges_bg, hist_bg_fit, '--', label='background fit')
+                    ax1.hist(signal_pxs, hist_end - hist_begin, [hist_begin, hist_end],
+                             log=True, label="signal")
+                    ax1.plot(edges_sig, hist_signal_fit, '--', label='signal fit')
+                    ax1.set_title('Tube {}'.format(i-3))
+
+                    ax1.set_ylim([0.5, np.max(hist_bg) * 2])
+                    ax1.set_xlim([0, 200])
+                    if i == 7:
+                        ax1.set_title('Control'.format(i))
+                        ax1.legend()
 
         unstandardized_scores[i] = coeff[1] - coeff_bg[1]  # np.median(signal_pxs) - coeff_bg[1]
         unstandardized_scores_medians[i] = np.median(signal_pxs) - coeff_bg[1]
@@ -266,6 +271,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # print()
         # unstandardized_scores[i] = maxVal
 
+    plt.show()
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
@@ -441,7 +447,7 @@ def main():
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
+            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
