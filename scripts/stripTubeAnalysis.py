@@ -16,14 +16,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import matplotlib as mpl
 from scipy import linalg
-import seaborn as sns
 
-
-sns.set()
-sns.set_palette("Paired")
-sns.set_style(style='white')
-sns.set_style("ticks", {"xtick.major.size": 8, "ytick.major.size": 8})
-plt.rcParams["patch.force_edgecolor"] = False
 
 def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     image = cv2.imread(image_file)  # image is loaded as BGR
@@ -55,7 +48,6 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     sig_dists = []
     sig_coeffs = []
 
-    fig_subplot, axs = plt.subplots(2, 2, sharex=True, sharey=True)
     # iterate over the tubes
     for i in range(0, strip_count):
 
@@ -94,9 +86,9 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         b_bg[:, :] = np.zeros([b_bg.shape[0], b_bg.shape[1]])
         # red channel is mostly UTM, so get rid of it:
         r_bg[:, :] = np.zeros([r_bg.shape[0], r_bg.shape[1]])
-        # if plotting and i > 3:
-        # tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-        #                        0, (227, 206, 166), 2)
+        if plotting:
+            tmp = cv2.drawContours(tmp, [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                   0, (255, 0, 0), 2)
 
         # now, define a subimage for the signal in the tube
         box = np.zeros((5, 2))
@@ -111,7 +103,10 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # focus in on the tube liquid's enclosing area
         subimage = cv2.bitwise_and(image, image, mask=mask)
         b, g, r = cv2.split(subimage)
-
+        if plotting:
+            plt.imshow(g)
+            plt.title('tube {}'.format(i))
+            plt.show()
         # Sometimes we see bright blue/white artifacts in the image. We have to remove them.
         b, g, r, blue_mask = remove_bright_blues(b, g, r, bkgd_blu, tube_width)
         # blue channel is all noise, so get rid of it:
@@ -119,6 +114,10 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # red channel is mostly UTM, so get rid of it:
         r[:, :] = np.zeros([b.shape[0], b.shape[1]])
         subimage = cv2.merge([b, g, r])
+        if plotting:
+            plt.imshow(g)
+            plt.title('tube {}'.format(i))
+            plt.show()
 
         # subtract away background noise level
         # g_mask = g[:, :] < (bkgd_grn.astype("uint8") + 1)
@@ -173,11 +172,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                     break
                 if kernel[m, n] != 0:
                     signal_pxs.append(g[max_row + m, max_col + n])
-                    # if plotting and (i == 4 or i == 5):
-                    #     # visualize where the kernel is placed
-                    #     tmp[max_row + m, max_col + n, 0] = 255
-                    #     tmp[max_row + m, max_col + n, 1] = 255
-                    #     tmp[max_row + m, max_col + n, 2] = 255
+                    if plotting:
+                        # visualize where the kernel is placed
+                        tmp[max_row + m, max_col + n, 0] = 255
+                        tmp[max_row + m, max_col + n, 1] = 255
+                        tmp[max_row + m, max_col + n, 2] = 255
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
@@ -227,59 +226,30 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         #     plt.title("tube {}".format(i))
         #     plt.show()
 
-        # if plotting and (i == 4 or i == 5):
-        #     kernel_cp = kernel > 0
-        #     kernel_cp.dtype = 'uint8'
-        #     contours, hierarchy = cv2.findContours(kernel_cp, cv2.RETR_EXTERNAL,
-        #                                                cv2.CHAIN_APPROX_NONE)
-        #     for z in range(0, len(contours[0])):
-        #         contours[0][z][0][0] += max_col
-        #         contours[0][z][0][1] += max_row
-        #
-        #     cv2.drawContours(tmp, contours, 0, (255, 255, 255), 2)
 
         if plotting:
-            # if i == strip_count - 1:
-            #     tmp = cv2.drawContours(tmp,
-            #                            [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-            #                            0, (255, 0, 0), 2)
-            # elif i > 3:
-            #     tmp = cv2.drawContours(tmp,
-            #                            [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
-            #                            0, (138, 223, 178), 2)
-            # tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
+            if i == strip_count - 1:
+                tmp = cv2.drawContours(tmp,
+                                       [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                       0, (0, 255, 255), 2)
+            else:
+                tmp = cv2.drawContours(tmp,
+                                       [np.array(box[0:4]).reshape((-1, 1, 2)).astype(np.int32)],
+                                       0, (0, 0, 255), 2)
+            tmp = cv2.circle(tmp, maxLoc, radius=5, color=(255, 255, 255), lineType=cv2.FILLED)
             if plt_hist:
-                if i > 3:
-                    ax1 = None
-                    if i == 4:
-                        ax1 = axs[0, 0]
-                    elif i == 5:
-                        ax1 = axs[0, 1]
-                    elif i == 6:
-                        ax1 = axs[1, 0]
-                    elif i == 7:
-                        ax1 = axs[1, 1]
-                    # ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
-                    #          log=True, label="subimage")
-                    # sns.distplot(g_bg[cc_bg, rr_bg].ravel())
-                    ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin,
-                             [hist_begin, hist_end],
-                             log=True, label="background")
-                    ax1.plot(edges_bg, hist_bg_fit, '--', label='background fit')
-                    ax1.hist(signal_pxs, hist_end - hist_begin, [hist_begin, hist_end],
-                             log=True, label="signal")
-                    ax1.plot(edges_sig, hist_signal_fit, '--', label='signal fit')
-                    ax1.set_title('Tube {}'.format(i - 3))
-
-                    ax1.set_ylim([0.5, np.max(hist_bg) * 2])
-                    ax1.set_xlim([0, 200])
-                    if i == 7:
-                        ax1.set_title('Control'.format(i))
-                        ax1.legend()
-            fig_subplot.add_subplot(111, frameon=False)
-            plt.tick_params(labelcolor='none', top=False, bottom=False, left=False, right=False)
-            plt.xlabel("Number of pixels")
-            plt.ylabel("Pixel intensity")
+                fig, ax1 = plt.subplots()
+                ax1.hist(g.ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True, label="subimage")
+                ax1.hist(g_bg[cc_bg, rr_bg].ravel(), hist_end - hist_begin, [hist_begin, hist_end],
+                         log=True, label="background")
+                # get hist of potential signal elements
+                ax1.plot(edges_sig, hist_sig, label="signal")
+                ax1.set_title('tube {}\n{}'.format(i, image_file.split('\\')[-1]))
+                ax1.plot(edges_sig, hist_signal_fit, '--', label='signal fit')
+                ax1.set_ylim([0.5, np.max(hist_bg) * 2])
+                plt.legend()
+                plt.show()
 
         unstandardized_scores[i] = coeff[1] - coeff_bg[1]  # np.median(signal_pxs) - coeff_bg[1]
         unstandardized_scores_medians[i] = np.median(signal_pxs) - coeff_bg[1]
@@ -291,7 +261,6 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         # print()
         # unstandardized_scores[i] = maxVal
 
-    plt.show()
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
@@ -307,13 +276,11 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         #     plt.show()
     # final_score = [unstandardized_score / unstandardized_scores[-1]
     #                for unstandardized_score in unstandardized_scores]
-    # print(unstandardized_scores)
     final_score = list((unstandardized_score - unstandardized_scores[-1]) / sig_coeffs[-1][2]
                        for unstandardized_score in unstandardized_scores)
     final_score_medians = list(
         (unstandardized_score_median - unstandardized_scores[-1]) / sig_coeffs[-1][2]
         for unstandardized_score_median in unstandardized_scores_medians)
-    # print(sig_coeffs[-1][2])
     f = open(image_file + ".scores.txt", "w")
     f.write(json.dumps(final_score))
     f.close()
@@ -339,13 +306,13 @@ def remove_bright_blues(b, g, r, bkgd_blu, tube_width):
     gf = g.astype(float) + .001
     blue_cutoff = 2 * bkgd_blu
     blue_mask1 = bf[:, :] > blue_cutoff
-    blue_mask2 = bf[:, :] / gf[:, :] > 0.8
+    blue_mask2 = bf[:, :] / gf[:, :] > 1
     blue_mask = np.logical_and(blue_mask1, blue_mask2)
     pixel_threshold = (tube_width / 10) ** 2
-    if np.sum(blue_mask) > pixel_threshold:
-        # be more stringent if we think we've detected a bright blue/white artifact
-        blue_cutoff = bkgd_blu * 1.5
-        blue_mask = b[:, :] > blue_cutoff
+    # if np.sum(blue_mask) > pixel_threshold:
+    #     # be more stringent if we think we've detected a bright blue/white artifact
+    #     blue_cutoff = bkgd_blu * 1.5
+    #     blue_mask = b[:, :] > blue_cutoff
     g[blue_mask] = 0
     r[blue_mask] = 0
 
@@ -452,22 +419,7 @@ def main():
     parser.add_argument('--tubeCoords', required=False)
     parser.add_argument('--plotting', help="Enable plotting", action='store_true')
     args = parser.parse_args()
-    threshold = 1.5
-
-    # fs = [8.455392751977696, 46.247966797288534, 0.7423274960752811, 0.0]
-    fs = [23.404471590657252, 122.53692189214857, 3.1725853678193516, 1.225410678847778]
-    data = dict(zip(["Tube 1", "Tube 2", "Tube 3", "Control"], fs))
-    tubes = list(data.keys())
-    values = list(data.values())
-    plt.figure(figsize=(3.8,4.8))
-    plt.bar([1,2,3,4], values, width = 0.4, log=True)
-    plt.xticks([1,2,3,4], tubes, rotation=60)
-    plt.ylabel("Background subtracted fluorescence")
-    plt.title("Signal detected per tube")
-    plt.hlines(5.15, 0.5, 4.5, colors=["#ffb482"], linestyles='dashed')
-    plt.show()
-
-    return
+    threshold = 1.0
 
     train_threshold = False
     if train_threshold:
@@ -476,7 +428,7 @@ def main():
         for file in glob.glob(
                 r'C:\Users\Sameed\Documents\Educational\PhD\Rotations\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
             # files = ["33b", "d1f3", "g.jpg-2020-05-07T170653394Z"]
-            files = ["33b"]
+            files = ["113"]
             if not any([f in file for f in files]):  # and "mins" not in file:
                 continue
             print(file)
@@ -484,7 +436,7 @@ def main():
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
+            run_analysis(file, tube_coords, threshold, plotting=False, plt_hist=True)
             print()
     else:
         final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
