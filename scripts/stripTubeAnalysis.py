@@ -19,29 +19,8 @@ from scipy.optimize import curve_fit
 import matplotlib as mpl
 from scipy import linalg
 import numpy as np
-
-# np.random.seed(12321)  # for reproducibility
-from keras.models import Model
-from keras.layers import Input
-import keras.layers
-from keras.layers.core import Dense, Dropout, Activation, Flatten
-from keras.layers.convolutional import Conv2D
-from keras.layers.pooling import MaxPooling2D
-import h5py
-from keras import backend as K
-# import utils_multiMNIST as U
-import keras.backend.tensorflow_backend as tfback
-import tensorflow as tf
-
-
-def _get_available_gpus():
-    if tfback._LOCAL_DEVICES is None:
-        devices = tf.config.list_logical_devices()
-        tfback._LOCAL_DEVICES = [x.name for x in devices]
-    return [x for x in tfback._LOCAL_DEVICES if 'device:gpu' in x.lower()]
-
-
-tfback._get_available_gpus = _get_available_gpus
+import ntpath
+from shutil import copyfile
 
 
 def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
@@ -51,9 +30,9 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     f.write(tube_coords_json)
     f.close()
     im_lower_dim = min(image.shape[0], image.shape[1])
-    blur_size = np.round(im_lower_dim / 500)
+    blur_size = 5 # np.round(im_lower_dim / 500)
     blur_size = int(blur_size if blur_size % 2 == 1 else blur_size + 1)
-    cv2.GaussianBlur(image, (blur_size, blur_size),
+    image = cv2.GaussianBlur(image, (blur_size, blur_size),
                      cv2.BORDER_DEFAULT)
     # resize large images
     resize_factor = 1
@@ -67,6 +46,18 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     # Filter the image to enhance various features
     # image = applyClahetoRGB(image, cv2.COLOR_BAYER_BG2RGB)  # Increase contrast to the image
 
+    # # rotate all of the images so that they have 0 angle:
+    # angle = np.rad2deg(np.arctan2(tube_coords[0][1] - tube_coords[0][3],
+    #                               tube_coords[0][2] - tube_coords[0][0]))
+    # print(angle)
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.title('{}'.format(image_file.split('\\')[-1]))
+    # plt.show()
+    # image = imutils.rotate_bound(image, 1 * angle)
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.title('fixed'.format(image_file.split('\\')[-1]))
+    # plt.show()
+
     unstandardized_scores = [None] * strip_count
     unstandardized_scores_medians = [None] * strip_count
     tmp = image.copy()
@@ -76,6 +67,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
 
     # iterate over the tubes
     subimages = []
+    kernel_masks = []
     for i in range(0, strip_count):
         tube_width = int(((tube_coords[i][2] - tube_coords[i][0]) ** 2 + (
                 tube_coords[i][3] - tube_coords[i][1]) ** 2) ** (1 / 2))
@@ -180,6 +172,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
 
         # get list of pixels identified as the tube's signal.
         signal_pxs = []
+        kernel_mask = np.zeros((image.shape[0], image.shape[1]), dtype=np.uint8)
         for m in range(0, kernel.shape[0]):
             if max_row + m >= g.shape[0]:
                 print("Error: please place more space between the strips and the edge of"
@@ -191,10 +184,15 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
                           " the captured image")
                     break
                 if kernel[m, n] != 0:
+                    kernel_mask[max_row + m, max_col + n] = 255
                     signal_pxs.append(g[max_row + m, max_col + n])
 
         hist_sig, edges_sig = np.histogram(signal_pxs, hist_end - hist_begin,
                                            [hist_begin, hist_end])
+        plt.plot(edges_sig[:-1], hist_sig, label='Test data')
+        plt.show()
+        plt.imshow(cv2.cvtColor(subimage, cv2.COLOR_BGR2RGB))
+        plt.show()
 
         edges_sig -= green_shift
         edges_sig = edges_sig[0:-1]
@@ -256,6 +254,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
         big_box2 = np.asarray(
             [[max_x, max_y], [max_x, min_y], [min_x, min_y], [min_x, max_y], [max_x, max_y]])
         subimages.append(image[min_y:max_y, min_x:max_x])
+        kernel_masks.append(kernel_mask[min_y:max_y, min_x:max_x])
 
         if plotting:
             if i == strip_count - 1:
@@ -301,10 +300,14 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
 
     for i in range(0, len(subimages)):
         subimage = subimages[i]
+        kernel_mask = kernel_masks[i]
         if subimage.shape[0] < subimage.shape[1]:
             subimage = scipy.ndimage.rotate(subimage, -90)
+            kernel_mask = scipy.ndimage.rotate(kernel_mask, -90)
         subimage = subimage[2:-2, 2:-2]
-        subimages[i] = cv2.resize(subimage, (31, 47))
+        kernel_mask = kernel_mask[2:-2, 2:-2]
+        # subimages[i] = cv2.resize(subimage, (31, 47))
+
     if plotting:
         fig, ax = plt.subplots(figsize=(10, 10))
         plt.imshow(cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB))
@@ -331,7 +334,7 @@ def getPredictions(image_file, tube_coords_json, plotting, plt_hist=False):
     f.write(json.dumps(final_score))
     f.close()
 
-    return final_score, final_score_medians, subimages
+    return final_score, final_score_medians, subimages, kernel_masks
 
 
 def extend_line(x1, y1, x2, y2, length):
@@ -454,7 +457,15 @@ def applyClahetoRGB(bgr_imb):
 
 
 def run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False):
-    fs, fs_m, subimages = getPredictions(file, tube_coords, plotting, plt_hist)
+    fs, fs_m, subimages, kernel_masks = getPredictions(file, tube_coords, plotting, plt_hist)
+
+    for i in range(0, len(kernel_masks)):
+        subimage_name = file + ".subimage-{}.png".format(i)
+        kernel_mask_name = file + ".kernel_mask -{}.png".format(i)
+
+        cv2.imwrite(subimage_name, subimages[i])
+        cv2.imwrite(kernel_mask_name, kernel_masks[i])
+
     calls = [1 if fs[i] > threshold and fs_m[i] > threshold else 0 for i in range(0, len(fs))]
     # print(json.dumps({"calls": calls, "final_scores": fs, "final_scores_median": fs_m}))
     return calls
@@ -475,80 +486,20 @@ def main():
     if train_threshold:
         thresholds = [1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
     elif False:
-        # load images
-        image_sets = np.load("image_sets.npy", allow_pickle=True)
-        images = []
-        regression_values = []
-        binary_values = []
+        for file in glob.glob(
+                r'C:\Users\Sameed\Documents\Educational\PhD\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg'):
+            if not glob.glob(
+                r'C:\Users\Sameed\Documents\Educational\PhD\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg*png'):
+                continue
+            fname = ntpath.basename(file)
+            copyfile(file, "for_brit/" + fname)
+            for sk_file in glob.glob(
+                r'C:\Users\Sameed\Documents\Educational\PhD\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*jpg*png'):
+                sk_file_name = ntpath.basename(sk_file)
+                copyfile(sk_file, "for_brit/"+sk_file_name)
 
-        for strips in image_sets:
-            for tube in strips:
-                images.append(tube)
-        images = np.asarray(images)
 
-        regression_sets = np.load("ys_regression.npy", allow_pickle=True)
-        for li in regression_sets:
-            regression_values.extend(li)
-        regression_values = np.asarray(regression_values)
-
-        binary_sets = np.load("ys_binary.npy", allow_pickle=True)
-        for li in binary_sets:
-            binary_values.extend(li)
-        binary_values = np.asarray(binary_values)
-        ct_pos = 0
-        ct_neg = 0
-        for i in range(0, len(binary_values)):
-            if binary_values[i]:
-                ct_pos += 1
-            else:
-                ct_neg += 1
-        print(ct_pos)
-        print(ct_neg)
-        X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(images,
-                                                                                    binary_values,
-                                                                                    test_size=0.2,
-                                                                                    random_state=42)
-        X_train_exp = X_train[:, 0:47, :, :]
-        X_train_ctrl = X_train[:, 47:, :, :]
-
-        X_test_exp = X_test[:, 0:47, :, :]
-        X_test_ctrl = X_test[:, 47:, :, :]
-
-        nb_epoch = 15
-        x1 = Input(shape=(47, 31, 3))
-        conv1 = Conv2D(8, (5, 5), activation='relu', data_format='channels_last')(x1)
-        mp1 = MaxPooling2D((2, 2), strides=(2, 2))(conv1)
-        conv2 = Conv2D(16, (3, 3), activation='relu')(mp1)
-        mp2 = MaxPooling2D((2, 2), strides=(1, 1))(conv2)
-        flat = Flatten()(mp2)
-        x1b = Input(shape=(47, 31, 3))
-        conv1b = Conv2D(8, (5, 5), activation='relu', data_format='channels_last')(x1b)
-        mp1b = MaxPooling2D((2, 2), strides=(2, 2))(conv1b)
-        conv2b = Conv2D(16, (3, 3), activation='relu')(mp1b)
-        mp2b = MaxPooling2D((2, 2), strides=(1, 1))(conv2b)
-        flatb = Flatten()(mp2b)
-        x = keras.layers.concatenate([flat, flatb])
-        dense = Dense(128, activation='relu')(x)
-        you_should_stay_in_school = Dropout(0.5)(dense)
-        predictions_1 = Dense(1, activation='sigmoid')(you_should_stay_in_school)
-        model = Model(inputs=[x1, x1b], outputs=[predictions_1])
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-        # fit model:
-        print(X_train.shape)
-        model.fit([X_train_exp, X_train_ctrl], y_train, nb_epoch=nb_epoch, verbose=1)
-        # classifications = [True if (ypred[i] > 1.5 and y_test[i] > 1.5) or
-        #                            (ypred[i] > 1.5 and y_test[i] > 1.5) else False for i in
-        #                    range(0, len(ypred))]
-        # positives = 0
-        # for res in classifications:
-        #     if res:
-        #         positives += 1
-
-        objective_score = model.evaluate([X_test_exp, X_test_ctrl], y_test)
-        print('Evaluation on test set:', dict(zip(model.metrics_names, objective_score)))
-
-    elif True:
+    elif False:
         truth_files = glob.glob(
             r'C:\Users\Sameed\Documents\Educational\PhD\Pardis\SHERLOCK-reader\covid\jon_pictures\uploads\*truths.txt')
         ta = glob.glob(
@@ -576,7 +527,7 @@ def main():
             with open(file + ".coords.txt") as f:
                 for line in f:  # there should only be one line in file f
                     tube_coords = line
-            calls = run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=True)
+            calls = run_analysis(file, tube_coords, threshold, plotting=True, plt_hist=False)
             f = open(reqs[0])
             binary_data = [True if 't' == d else False for d in json.load(f)]
 
@@ -589,7 +540,13 @@ def main():
         print(incorrect)
 
     else:
-        final_scores = run_analysis(args.image_file, args.tubeCoords, threshold, args.plotting)
+        file = r'C:\Users\Sameed\Documents\Educational\PhD\Pardis\SHERLOCK-reader\covid\jon_pictures\IMG_sampleName-2.jpg-2020-07-30T011843629Z.jpg'
+        tube_coords=None
+        with open(file + ".coords.txt") as f:
+            for line in f:  # there should only be one line in file f
+                tube_coords = line
+        final_scores = run_analysis(file, tube_coords, threshold, args.plotting)
+
 
 
 if __name__ == '__main__':

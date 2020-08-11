@@ -1,0 +1,33 @@
+def getPredictions(image, tube_coords):
+    image := gaussian_blur(image, radius=min(dimensions of image))
+    image := resize image so that the smaller dimension has 1000 pixels
+
+    signal_intensities = []
+
+    for every tube identified in the image:
+        bg_height = tube.height/2.5
+        bg_width = tube.width
+        subimage_bg = region immediately adjacent to the bottom of the tube, with height bg_height, width bg_width
+        # get histogram of green channel, which has most of our information:
+        histogram_bg = histogram(subimage_bg.green_channel)
+
+        # identify brightest region within the tube (e.g. center of SHINE reaction)
+        subimage = image[tube.pixels] # select only the pixels corresponding to the rectangular region of this tube
+        trapezoidal_kernel = trapezoidal mask with upper and lower edges parallel to tube upper and lower edges
+        signal_center = max_location(convolution(subimage, trapezoidal_kernel))
+        shine_reaction_pixels = subimage[trapezoidal_kernel mask centered around signal_center]
+        histogram_signal = histogram(shine_reaction_pixels.green_channel)
+
+        background_gaussian = fit_gaussian(histogram_bg)
+        signal_gaussian = fit_gaussian(histogram_signal)
+
+        if tube is control tube:
+            std_dev = signal_gaussian.std
+
+        # take median of signal instead of fitting gaussian, because sometimes
+        # the signal is too saturated to fit a gaussian
+        signal_intensities.append(histogram_signal.median - background_gaussian.mean)
+
+    scores = (signal_intensities - signal_intensities[-1])/std_dev
+    calls = [score > 1.5 for score in scores]
+    return scores, calls
